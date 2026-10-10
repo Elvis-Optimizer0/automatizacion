@@ -150,7 +150,7 @@ function validateSceneDurations(durations, transitionDuration) {
 }
 
 function buildTimeline(project, audioDuration) {
-  const { images, script, config, sceneDurationOverrides } = project;
+  const { images, script, config, sceneDurationOverrides, sceneOverrides } = project;
   const N = images.length;
   const transitionDuration = config.transition.duration;
 
@@ -185,17 +185,26 @@ function buildTimeline(project, audioDuration) {
   for (let i = 0; i < N; i++) {
     const start = i === 0 ? 0 : scenes[i - 1].end;
     const end = start + durations[i];
-    const isVideo = images[i].toLowerCase().endsWith('.mp4');
+    const imageObj = typeof images[i] === 'string' ? { file: images[i] } : images[i];
+    const file = imageObj.file;
+    const isVideo = file.toLowerCase().endsWith('.mp4');
+
+    const sceneOverride = sceneOverrides[i.toString()];
+    const zoomStyle = sceneOverride?.zoom || (isVideo ? 'none' : selectStyle(config.zoom.styles, config.zoom.mode, i));
+    const transitionType = sceneOverride?.transition || (i < N - 1 ? selectTransitionType(config.transition.types, config.transition.mode, i) : 'cut');
+    const zoomIntensity = sceneOverride?.zoomIntensity || 'normal';
 
     scenes.push({
       index: i,
-      file: images[i],
+      file,
       start,
       end,
       duration: durations[i],
       isVideo,
-      zoomStyle: isVideo ? 'none' : selectStyle(config.zoom.styles, config.zoom.mode, i),
-      transitionType: i < N - 1 ? selectTransitionType(config.transition.types, config.transition.mode, i) : 'cut'
+      zoomStyle,
+      transitionType,
+      zoomIntensity,
+      focus: imageObj.focus || { x: 0.5, y: 0.5 }
     });
   }
 

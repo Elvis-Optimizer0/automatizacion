@@ -1,7 +1,7 @@
 const { spawn } = require('child_process');
 const path = require('path');
 const { getFfmpegPath, getFfprobePath } = require('./binaries');
-const { buildFfmpegArgs } = require('./ffmpeg-builder');
+const { buildFfmpegArgs, buildOutputConfigs, generateOutputFilename } = require('./ffmpeg-builder');
 
 function getAudioDuration(audioPath) {
   return new Promise((resolve, reject) => {
@@ -92,7 +92,7 @@ function renderPreview(project, timeline, fontPath, outputPath, onProgress) {
     ...project,
     config: {
       ...project.config,
-      resolution: project.config.resolution
+      outputs: [project.config.outputs[0]]
     }
   };
 
@@ -143,4 +143,82 @@ function renderPreview(project, timeline, fontPath, outputPath, onProgress) {
   });
 }
 
-module.exports = { renderVideo, renderPreview, getAudioDuration };
+async function renderAllOutputs(project, timeline, fontPath, outputDir, onProgress) {
+  const outputConfigs = buildOutputConfigs(project.config);
+  const baseName = path.basename(project.narration, path.extname(project.narration));
+  const results = [];
+  const errors = [];
+  const existingFiles = [];
+
+  for (let i = 0; i < outputConfigs.length; i++) {
+    const outputConfig = outputConfigs[i];
+    const filename = generateOutputFilename(baseName, outputConfig, existingFiles);
+    const outputPath = path.join(outputDir, filename);
+    existingFiles.push(filename);
+
+    const progressCallback = onProgress ? (progress, current, total) => {
+      const globalProgress = ((i + progress / 100) / outputConfigs.length) * 100;
+      onProgress(globalProgress, current, total, i + 1, outputConfigs.length, outputConfig.resolution);
+    } : null;
+
+    try {
+      const result = await renderVideoForOutput(project, timeline, fontPath, outputPath, outputConfig, progressCallback);
+      results.push({ ...result, resolution: outputConfig.resolution, filename });
+      existingFiles.push(filename);
+    } catch (err) {
+      errors.push({ resolution: outputConfig.resolution, error: err.message });
+    }
+  }
+
+  return { results, errors };
+}
+
+function renderVideoForOutput(project, timeline, fontPath, outputPath, outputConfig, onProgress) {
+  return new Promise((resolve, reject) => {
+    const args = buildFfmpegArgs(project, timeline, fontPath, outputPath, outputConfig);
+    const ffmpeg = getFfmpegPath();
+
+    const proc = spawn(ffmpeg, args, { windowsHide: true });
+
+    let stderr = '';
+    let lastProgress = 0;
+
+    proc.stdout.on('data', data => {
+      const lines = data.toString().split('\n');
+      for (const line of lines) {
+        if (line.startsWith('out_time_ms=')) {
+          const ms = parseInt(line.split('=')[1], 10);
+          if (!isNaN(ms) && timeline.audioDuration > 0) {
+            const progress = Math.min(100, (ms / 1000) / timeline.audioDuration * 100);
+            if (progress !== lastProgress && onProgress) {
+              lastProgress = progress;
+              onProgress(progress, ms / 1e6, timeline.audioDuration);
+            }
+          }
+        } else if (line.startsWith('progress=')) {
+          if (line.includes('end') && onProgress) {
+            onProgress(100, timeline.audioDuration, timeline.audioDuration);
+          }
+        }
+      }
+    });
+
+    proc.stderr.on('data', data => {
+      stderr += data.toString();
+    });
+
+    proc.on('close', code => {
+      if (code !== 0) {
+        reject(new Error(`E_FFMPEG_MISSING: FFmpeg falló (código ${code}): ${stderr}`));
+        return;
+      }
+      resolve({ success: true, outputPath });
+    });
+
+    proc.on('error', err => {
+      reject(new Error(`E_FFMPEG_MISSING: FFmpeg no encontrado: ${err.message}`));
+    });
+  });
+}
+
+module.exports = { renderVideo, renderPreview, getAudioDuration, renderAllOutputs, renderVideoForOutput };

@@ -28,10 +28,11 @@ function escapeFontPath(fontPath) {
     .replace(/'/g, "\\'");
 }
 
-function buildZoomFilter(style, initialScale, intensity, duration, fps, W, H) {
+function buildZoomFilter(style, initialScale, intensity, duration, fps, W, H, zoomIntensity = 'normal') {
   const D = Math.round(duration * fps);
   const s0 = initialScale;
-  const k = intensity;
+  const intensityMult = zoomIntensity === 'soft' ? 0.5 : zoomIntensity === 'strong' ? 1.5 : 1;
+  const k = intensity * intensityMult;
   const p = `(on/(${D}-1))`;
 
   let zExpr, xExpr, yExpr;
@@ -88,20 +89,59 @@ function buildZoomFilter(style, initialScale, intensity, duration, fps, W, H) {
   return `zoompan=z='${zExpr}':x='${xExpr}':y='${yExpr}':d=${D}:s=${W}x${H}:fps=${fps}`;
 }
 
-function buildImageFilterChain(scene, W, H, fps, zoomEnabled, zoomConfig) {
-  const { file, duration, zoomStyle } = scene;
+function buildCropFilter(scene, W, H, fitMode) {
+  const { focus } = scene;
+  const fx = focus?.x ?? 0.5;
+  const fy = focus?.y ?? 0.5;
+
+  if (fitMode === 'blur') {
+    return '';
+  }
+
+  const scaleW = W * 2;
+  const scaleH = H * 2;
+  const cropX = `max(0,min(iw-${scaleW},${fx}*iw-${scaleW}))`;
+  const cropY = `max(0,min(ih-${scaleH},${fy}*ih-${scaleH}))`;
+
+  return `scale=${scaleW}:${scaleH}:force_original_aspect_ratio=increase,crop=${scaleW}:${scaleH}:x='${cropX}':y='${cropY}'`;
+}
+
+function buildBlurFilter(W, H) {
+  return `scale=${W}:${H}:force_original_aspect_ratio=increase,boxblur=luma_radius=min(iw\\,ih)/20:luma_power=2,eq=brightness=-0.1`;
+}
+
+function buildContainFilter(W, H) {
+  return `scale=${W}:${H}:force_original_aspect_ratio=decrease`;
+}
+
+function buildImageFilterChain(scene, W, H, fps, zoomEnabled, zoomConfig, fitMode) {
+  const { file, duration, zoomStyle, zoomIntensity, focus } = scene;
   const isVideo = file.toLowerCase().endsWith('.mp4');
 
   if (isVideo) {
-    return `[${file}]scale=${W}:${H}:force_original_aspect_ratio=${zoomConfig.imageFit},pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,format=yuv420p,setsar=1,trim=duration=${duration}[v${scene.index}]`;
+    const cropFilter = fitMode === 'crop' ? buildCropFilter(scene, W, H, fitMode) : '';
+    const scaleFilter = cropFilter || `scale=${W}:${H}:force_original_aspect_ratio=cover`;
+    return `[${file}]${scaleFilter},pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,format=yuv420p,setsar=1,trim=duration=${duration}[v${scene.index}]`;
   }
 
-  if (!zoomEnabled) {
-    return `[${file}]scale=${W}:${H}:force_original_aspect_ratio=${zoomConfig.imageFit},pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,format=yuv420p,setsar=1[img${scene.index}];[img${scene.index}]trim=duration=${duration}[v${scene.index}]`;
+  if (fitMode === 'blur') {
+    const blurBg = buildBlurFilter(W, H);
+    const containFg = buildContainFilter(W, H);
+    if (!zoomEnabled || zoomStyle === 'none') {
+      return `[${file}]${blurBg}[bg${scene.index}];[${file}]${containFg}[fg${scene.index}];[bg${scene.index}][fg${scene.index}]overlay=(W-w)/2:(H-h)/2,format=yuv420p,setsar=1,trim=duration=${duration}[v${scene.index}]`;
+    }
+    const zoomFilter = buildZoomFilter(zoomStyle, zoomConfig.initialScale, zoomConfig.intensity, duration, fps, W, H, zoomIntensity);
+    return `[${file}]${blurBg}[bg${scene.index}];[${file}]${containFg},${zoomFilter},format=yuv420p,setsar=1[fg${scene.index}];[bg${scene.index}][fg${scene.index}]overlay=(W-w)/2:(H-h)/2,trim=duration=${duration}[v${scene.index}]`;
   }
 
-  const zoomFilter = buildZoomFilter(zoomStyle, zoomConfig.initialScale, zoomConfig.intensity, duration, fps, W, H);
-  return `[${file}]scale=${W*2}:${H*2}:force_original_aspect_ratio=increase,crop=${W*2}:${H*2},${zoomFilter},format=yuv420p,setsar=1[v${scene.index}]`;
+  const cropFilter = buildCropFilter(scene, W, H, fitMode);
+
+  if (!zoomEnabled || zoomStyle === 'none') {
+    return `[${file}]${cropFilter},pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,format=yuv420p,setsar=1,trim=duration=${duration}[v${scene.index}]`;
+  }
+
+  const zoomFilter = buildZoomFilter(zoomStyle, zoomConfig.initialScale, zoomConfig.intensity, duration, fps, W, H, zoomIntensity);
+  return `[${file}]${cropFilter},${zoomFilter},format=yuv420p,setsar=1[v${scene.index}]`;
 }
 
 function buildBadgeFilter(badge, W, H, sceneIndex, totalDuration) {
@@ -121,7 +161,8 @@ function buildLowerThirdFilter(config, W, H, fontPath) {
 
   const boxH = Math.round(H * 0.08);
   const y = Math.round(H * 0.88);
-  const fontSize = Math.round(H * 0.03);
+  let fontSize = Math.round(H * 0.03);
+  const maxTextWidth = W * 0.9;
   const escapedFont = escapeFontPath(fontPath);
 
   return `drawbox=x=0:y=${y}:w=${W}:h=${boxH}:color=black@${config.opacity}:t=fill,drawtext=fontfile='${escapedFont}':text='${config.text.replace(/'/g, "\\'")}':fontsize=${fontSize}:fontcolor=white:x=(w-text_w)/2:y=${y}+(h-text_h)/2`;
@@ -158,45 +199,37 @@ function buildTransitionChain(scenes, transitionDuration, W, H) {
 function buildFilterComplex(project, timeline, fontPath) {
   const { config } = project;
   const { scenes, totalDuration } = timeline;
-  const { w: W, h: H } = getResolutionWH(config.resolution);
   const fps = config.fps;
 
   let filter = '';
-  const inputLabels = [];
 
   for (let i = 0; i < scenes.length; i++) {
     const scene = scenes[i];
-    filter += buildImageFilterChain(scene, W, H, fps, config.zoom.enabled, config.zoom) + ';';
-    inputLabels.push(`v${i}`);
+    filter += buildImageFilterChain(scene, config.outputs[0].w, config.outputs[0].h, fps, config.zoom.enabled, config.zoom, config.fitMode) + ';';
   }
 
-  filter += buildTransitionChain(scenes, config.transition.duration, W, H);
+  filter += buildTransitionChain(scenes, config.transition.duration, config.outputs[0].w, config.outputs[0].h);
 
   const lastLabel = scenes.length === 1 ? 'v0' : 'vout';
-
-  const overlays = [];
+  let currentLabel = lastLabel;
 
   if (config.badges.length > 0) {
-    let currentLabel = lastLabel;
     for (let i = 0; i < config.badges.length; i++) {
       const badge = config.badges[i];
       const nextLabel = i === config.badges.length - 1 ? 'vbadges' : `vbadge${i}`;
-      filter += buildBadgeFilter(badge, W, H, i, totalDuration);
-      filter += `[${currentLabel}][badge${i}]overlay=x=${getPositionCoords(badge.position, W, H, Math.round(W * badge.sizePercent / 100), Math.round(W * badge.sizePercent / 100)).x}:y=${getPositionCoords(badge.position, W, H, Math.round(W * badge.sizePercent / 100), Math.round(W * badge.sizePercent / 100)).y}:enable='${buildBadgeFilter(badge, W, H, i, totalDuration).match(/enable='([^']+)'/)[1]}'[${nextLabel}];`;
+      filter += buildBadgeFilter(badge, config.outputs[0].w, config.outputs[0].h, i, totalDuration);
+      filter += `[${currentLabel}][badge${i}]overlay=x=${getPositionCoords(badge.position, config.outputs[0].w, config.outputs[0].h, Math.round(config.outputs[0].w * badge.sizePercent / 100), Math.round(config.outputs[0].w * badge.sizePercent / 100)).x}:y=${getPositionCoords(badge.position, config.outputs[0].w, config.outputs[0].h, Math.round(config.outputs[0].w * badge.sizePercent / 100), Math.round(config.outputs[0].w * badge.sizePercent / 100)).y}:enable='${buildBadgeFilter(badge, config.outputs[0].w, config.outputs[0].h, i, totalDuration).match(/enable='([^']+)'/)[1]}'[${nextLabel}];`;
       currentLabel = nextLabel;
     }
   }
 
-  const baseLabel = config.badges.length > 0 ? 'vbadges' : lastLabel;
-  let currentLabel = baseLabel;
-
-  const lowerThirdFilter = buildLowerThirdFilter(config.lowerThird, W, H, fontPath);
+  const lowerThirdFilter = buildLowerThirdFilter(config.lowerThird, config.outputs[0].w, config.outputs[0].h, fontPath);
   if (lowerThirdFilter) {
     filter += `[${currentLabel}]${lowerThirdFilter}[vlower];`;
     currentLabel = 'vlower';
   }
 
-  const progressFilter = buildProgressBarFilter(config.progressBar, W, H, totalDuration);
+  const progressFilter = buildProgressBarFilter(config.progressBar, config.outputs[0].w, config.outputs[0].h, totalDuration);
   if (progressFilter) {
     filter += `[${currentLabel}]${progressFilter}[vprogress];`;
     currentLabel = 'vprogress';
@@ -207,14 +240,13 @@ function buildFilterComplex(project, timeline, fontPath) {
   return filter;
 }
 
-function buildFfmpegArgs(project, timeline, fontPath, outputPath) {
+function buildFfmpegArgs(project, timeline, fontPath, outputPath, outputConfig) {
   const { config } = project;
   const { scenes, audioDuration } = timeline;
-  const { w: W, h: H } = getResolutionWH(config.resolution);
   const fps = config.fps;
+  const { w: W, h: H } = outputConfig;
 
   const inputs = [];
-  const inputArgs = [];
 
   for (let i = 0; i < scenes.length; i++) {
     const scene = scenes[i];
@@ -240,7 +272,7 @@ function buildFfmpegArgs(project, timeline, fontPath, outputPath) {
     audioMap = '[aout]';
   }
 
-  const filterComplex = buildFilterComplex(project, timeline, fontPath);
+  const filterComplex = buildFilterComplexForOutput(project, timeline, fontPath, outputConfig);
 
   const args = [
     ...inputs,
@@ -264,4 +296,80 @@ function buildFfmpegArgs(project, timeline, fontPath, outputPath) {
   return args;
 }
 
-module.exports = { buildFfmpegArgs, getResolutionWH, buildFilterComplex, buildZoomFilter, escapeFontPath };
+function buildFilterComplexForOutput(project, timeline, fontPath, outputConfig) {
+  const { config } = project;
+  const { scenes, totalDuration } = timeline;
+  const fps = config.fps;
+  const { w: W, h: H } = outputConfig;
+
+  let filter = '';
+
+  for (let i = 0; i < scenes.length; i++) {
+    const scene = scenes[i];
+    filter += buildImageFilterChain(scene, W, H, fps, config.zoom.enabled, config.zoom, config.fitMode) + ';';
+  }
+
+  filter += buildTransitionChain(scenes, config.transition.duration, W, H);
+
+  const lastLabel = scenes.length === 1 ? 'v0' : 'vout';
+  let currentLabel = lastLabel;
+
+  if (config.badges.length > 0) {
+    for (let i = 0; i < config.badges.length; i++) {
+      const badge = config.badges[i];
+      const nextLabel = i === config.badges.length - 1 ? 'vbadges' : `vbadge${i}`;
+      filter += buildBadgeFilter(badge, W, H, i, totalDuration);
+      filter += `[${currentLabel}][badge${i}]overlay=x=${getPositionCoords(badge.position, W, H, Math.round(W * badge.sizePercent / 100), Math.round(W * badge.sizePercent / 100)).x}:y=${getPositionCoords(badge.position, W, H, Math.round(W * badge.sizePercent / 100), Math.round(W * badge.sizePercent / 100)).y}:enable='${buildBadgeFilter(badge, W, H, i, totalDuration).match(/enable='([^']+)'/)[1]}'[${nextLabel}];`;
+      currentLabel = nextLabel;
+    }
+  }
+
+  const lowerThirdFilter = buildLowerThirdFilter(config.lowerThird, W, H, fontPath);
+  if (lowerThirdFilter) {
+    filter += `[${currentLabel}]${lowerThirdFilter}[vlower];`;
+    currentLabel = 'vlower';
+  }
+
+  const progressFilter = buildProgressBarFilter(config.progressBar, W, H, totalDuration);
+  if (progressFilter) {
+    filter += `[${currentLabel}]${progressFilter}[vprogress];`;
+    currentLabel = 'vprogress';
+  }
+
+  filter += `[${currentLabel}]copy[vfinal]`;
+
+  return filter;
+}
+
+function buildOutputConfigs(config) {
+  return config.outputs.map(res => {
+    const base = getResolutionWH(res);
+    return { ...base, resolution: res };
+  });
+}
+
+function generateOutputFilename(baseName, outputConfig, existingFiles = []) {
+  const suffix = outputConfig.resolution === '9:16' ? '_9x16' :
+                 outputConfig.resolution === '16:9' ? '_16x9' : '_1x1';
+  let filename = `${baseName}${suffix}.mp4`;
+  let counter = 1;
+  while (existingFiles.includes(filename)) {
+    counter++;
+    filename = `${baseName}${suffix} (${counter}).mp4`;
+  }
+  return filename;
+}
+
+module.exports = {
+  buildFfmpegArgs,
+  getResolutionWH,
+  buildFilterComplex,
+  buildFilterComplexForOutput,
+  buildZoomFilter,
+  escapeFontPath,
+  buildOutputConfigs,
+  generateOutputFilename,
+  buildCropFilter,
+  buildBlurFilter,
+  buildContainFilter
+};

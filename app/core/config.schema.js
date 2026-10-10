@@ -10,7 +10,7 @@ const ZoomConfigSchema = z.object({
 
 const TransitionConfigSchema = z.object({
   mode: z.enum(['fixed', 'alternate', 'random']).default('fixed'),
-  types: z.array(z.enum(['slideleft', 'slideright', 'slidedown', 'fade', 'cut'])).default(['slidedown']),
+  types: z.array(z.enum(['slideleft', 'slideright', 'slidedown', 'fade', 'cut', 'fadeblack', 'dissolve', 'slideup', 'wipeleft', 'wiperight', 'circleopen'])).default(['slidedown']),
   duration: z.number().min(0.1).max(2.0).default(0.5)
 });
 
@@ -40,8 +40,19 @@ const MusicSchema = z.object({
   volume: z.number().min(0).max(1).default(0.12)
 }).optional();
 
+const FocusPointSchema = z.object({
+  x: z.number().min(0).max(1).default(0.5),
+  y: z.number().min(0).max(1).default(0.5)
+});
+
+const ImageWithFocusSchema = z.object({
+  file: z.string().regex(/\.(png|jpg|jpeg|webp|mp4)$/i),
+  focus: FocusPointSchema.optional()
+});
+
 const ConfigSchema = z.object({
-  resolution: z.enum(['9:16', '16:9', '1:1']).default('9:16'),
+  outputs: z.array(z.enum(['9:16', '16:9', '1:1'])).min(1).max(3).default(['9:16', '16:9']),
+  fitMode: z.enum(['crop', 'blur']).default('crop'),
   fps: z.number().int().positive().default(30),
   imageFit: z.enum(['cover', 'contain']).default('cover'),
   fitTimesToAudio: z.boolean().default(true),
@@ -53,16 +64,22 @@ const ConfigSchema = z.object({
 });
 
 const ProjectSchema = z.object({
-  images: z.array(z.string().regex(/\.(png|jpg|jpeg|webp|mp4)$/i)).min(1),
+  images: z.array(ImageWithFocusSchema).min(1),
   narration: z.string().regex(/\.(mp3|wav|m4a|aac)$/i),
   music: MusicSchema,
   script: z.string().optional(),
   config: ConfigSchema.default({}),
-  sceneDurationOverrides: z.record(z.string(), z.number().positive()).default({})
+  sceneDurationOverrides: z.record(z.string(), z.number().positive()).default({}),
+  sceneOverrides: z.record(z.string(), z.object({
+    zoom: z.enum(['kenburns', 'zoomin', 'zoomout', 'zoompulse', 'panleft', 'panright', 'panup', 'pandown', 'none']).optional(),
+    transition: z.enum(['slideleft', 'slideright', 'slidedown', 'fade', 'cut', 'fadeblack', 'dissolve', 'slideup', 'wipeleft', 'wiperight', 'circleopen']).optional(),
+    zoomIntensity: z.enum(['normal', 'soft', 'strong']).optional()
+  })).default({})
 });
 
 const DEFAULT_CONFIG = {
-  resolution: '9:16',
+  outputs: ['9:16', '16:9'],
+  fitMode: 'crop',
   fps: 30,
   imageFit: 'cover',
   fitTimesToAudio: true,
@@ -91,12 +108,24 @@ const DEFAULT_CONFIG = {
   }
 };
 
+function migrateProject(data) {
+  if (data.config && data.config.resolution && !data.config.outputs) {
+    data.config.outputs = [data.config.resolution];
+    delete data.config.resolution;
+  }
+  if (data.images && data.images.length > 0 && typeof data.images[0] === 'string') {
+    data.images = data.images.map(file => ({ file, focus: { x: 0.5, y: 0.5 } }));
+  }
+  return data;
+}
+
 function validateProject(data) {
-  return ProjectSchema.parse(data);
+  const migrated = migrateProject(data);
+  return ProjectSchema.parse(migrated);
 }
 
 function getDefaultConfig() {
   return DEFAULT_CONFIG;
 }
 
-module.exports = { validateProject, getDefaultConfig, ProjectSchema, ConfigSchema };
+module.exports = { validateProject, getDefaultConfig, ProjectSchema, ConfigSchema, FocusPointSchema, ImageWithFocusSchema };

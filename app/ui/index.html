@@ -33,6 +33,20 @@
           </div>
         </div>
         <p class="status-text" id="images-status">Sin archivos</p>
+
+        <div class="focus-editor" id="focus-editor" hidden>
+          <h3>Punto de enfoque</h3>
+          <div class="focus-preview" id="focus-preview">
+            <img id="focus-main-img" src="" alt="Imagen principal">
+            <div class="focus-overlay-9x16" id="overlay-9x16"></div>
+            <div class="focus-overlay-16x9" id="overlay-16x9"></div>
+            <div class="focus-point" id="focus-point"></div>
+          </div>
+          <div class="focus-controls">
+            <button class="btn btn-secondary" id="focus-center">Centrar</button>
+            <button class="btn btn-secondary" id="focus-apply-all">Aplicar a todas</button>
+          </div>
+        </div>
       </section>
 
       <section class="card" id="section-audio">
@@ -107,12 +121,20 @@
         </div>
 
         <div class="config-grid">
-          <div class="config-group">
-            <label>Resolución</label>
-            <div class="segmented" id="resolution-segmented">
-              <button class="segment active" data-value="9:16">9:16 Vertical</button>
-              <button class="segment" data-value="16:9">16:9 Horizontal</button>
-              <button class="segment" data-value="1:1">1:1 Cuadrado</button>
+          <div class="config-group full-width">
+            <label>Formatos de salida</label>
+            <div class="chips" id="output-chips">
+              <button class="chip active" data-value="9:16">9:16 Vertical (TikTok · Shorts)</button>
+              <button class="chip active" data-value="16:9">16:9 Horizontal (YouTube)</button>
+              <button class="chip" data-value="1:1">1:1 Cuadrado</button>
+            </div>
+          </div>
+
+          <div class="config-group full-width">
+            <label>Modo de ajuste</label>
+            <div class="segmented" id="fitmode-segmented">
+              <button class="segment active" data-value="crop">Recortar con enfoque</button>
+              <button class="segment" data-value="blur">Fondo desenfocado</button>
             </div>
           </div>
 
@@ -170,11 +192,21 @@
           <div class="config-group">
             <label>Transiciones</label>
             <div class="chips" id="transition-chips">
-              <button class="chip active" data-value="slidedown">Slide ↓</button>
-              <button class="chip" data-value="slideleft">Slide ←</button>
-              <button class="chip" data-value="slideright">Slide →</button>
-              <button class="chip" data-value="fade">Fundido</button>
-              <button class="chip" data-value="cut">Corte</button>
+              <button class="chip" data-value="cut">Sin transición (corte)</button>
+              <button class="chip active" data-value="fade">Fundido</button>
+              <button class="chip" data-value="fadeblack">Fundido a negro</button>
+              <button class="chip" data-value="dissolve">Disolver</button>
+              <button class="chip" data-value="slideleft">Deslizar ←</button>
+              <button class="chip" data-value="slideright">Deslizar →</button>
+              <button class="chip" data-value="slideup">Deslizar ↑</button>
+              <button class="chip active" data-value="slidedown">Deslizar ↓</button>
+              <button class="chip" data-value="wipeleft">Cortina ←</button>
+              <button class="chip" data-value="wiperight">Cortina →</button>
+              <button class="chip" data-value="circleopen">Círculo</button>
+            </div>
+            <div class="chips-actions">
+              <button class="btn btn-sm btn-secondary" id="transitions-only-fades">Solo fundidos</button>
+              <button class="btn btn-sm btn-secondary" id="transitions-none">Sin transiciones</button>
             </div>
           </div>
 
@@ -259,6 +291,41 @@
 
         <div id="timeline-container" hidden>
           <p class="timeline-factor" id="timeline-factor"></p>
+
+          <div class="timeline-actions">
+            <div class="apply-all-group">
+              <label>Aplicar a todas:</label>
+              <select id="apply-all-zoom">
+                <option value="">— Zoom —</option>
+                <option value="kenburns">Ken Burns</option>
+                <option value="zoomin">Zoom In</option>
+                <option value="zoomout">Zoom Out</option>
+                <option value="zoompulse">Zoom Pulse</option>
+                <option value="panleft">Pan ←</option>
+                <option value="panright">Pan →</option>
+                <option value="panup">Pan ↑</option>
+                <option value="pandown">Pan ↓</option>
+                <option value="none">Sin zoom</option>
+              </select>
+              <select id="apply-all-transition">
+                <option value="">— Transición —</option>
+                <option value="cut">Sin transición (corte)</option>
+                <option value="fade">Fundido</option>
+                <option value="fadeblack">Fundido a negro</option>
+                <option value="dissolve">Disolver</option>
+                <option value="slideleft">Deslizar ←</option>
+                <option value="slideright">Deslizar →</option>
+                <option value="slideup">Deslizar ↑</option>
+                <option value="slidedown">Deslizar ↓</option>
+                <option value="wipeleft">Cortina ←</option>
+                <option value="wiperight">Cortina →</option>
+                <option value="circleopen">Círculo</option>
+              </select>
+              <button class="btn btn-secondary" id="apply-all-btn">Aplicar</button>
+              <button class="btn btn-secondary" id="reset-overrides-btn">Restablecer</button>
+            </div>
+          </div>
+
           <div class="table-wrapper">
             <table class="timeline-table" id="timeline-table">
               <thead>
@@ -269,6 +336,7 @@
                   <th>Fin</th>
                   <th>Duración</th>
                   <th>Zoom</th>
+                  <th>Intensidad</th>
                   <th>Transición</th>
                 </tr>
               </thead>
@@ -277,7 +345,10 @@
           </div>
 
           <div class="preview-section" id="preview-section" hidden>
-            <h3>Vista previa (540px, ultrafast)</h3>
+            <div class="preview-header">
+              <h3>Vista previa (540px, ultrafast)</h3>
+              <select id="preview-format" class="preview-format-select"></select>
+            </div>
             <video id="preview-video" controls style="max-width: 100%; border-radius: 8px;"></video>
             <div class="progress-bar-container" id="preview-progress" hidden>
               <div class="progress-bar-fill" id="preview-progress-fill"></div>
@@ -286,11 +357,12 @@
           </div>
 
           <div class="export-section">
-            <button class="btn btn-primary btn-large" id="export-video">Exportar MP4</button>
+            <button class="btn btn-primary btn-large" id="export-video">Exportar</button>
             <div class="progress-bar-container" id="export-progress" hidden>
               <div class="progress-bar-fill" id="export-progress-fill"></div>
               <span class="progress-text" id="export-progress-text">0%</span>
             </div>
+            <div class="export-results" id="export-results" hidden></div>
             <button class="btn btn-secondary" id="open-folder" hidden>Abrir carpeta</button>
           </div>
         </div>

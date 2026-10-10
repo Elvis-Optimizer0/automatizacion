@@ -3,9 +3,10 @@ const path = require('node:path');
 const { verifyBinaries } = require('./core/binaries');
 const { validateProject, getDefaultConfig } = require('./core/config.schema');
 const { buildTimeline } = require('./core/timeline');
-const { renderVideo, renderPreview, getAudioDuration } = require('./core/render');
+const { renderVideo, renderPreview, getAudioDuration, renderAllOutputs, renderVideoForOutput } = require('./core/render');
 
 let mainWindow = null;
+let lastOutputDir = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -37,6 +38,16 @@ app.whenReady().then(async () => {
     console.error('Error verificando binarios:', err.message);
   }
 
+  const { app: electronApp } = require('electron');
+  const settingsPath = path.join(electronApp.getPath('userData'), 'settings.json');
+  try {
+    const fs = require('fs');
+    if (fs.existsSync(settingsPath)) {
+      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
+      lastOutputDir = settings.lastOutputDir;
+    }
+  } catch (e) {}
+
   createWindow();
 
   app.on('activate', () => {
@@ -59,6 +70,15 @@ ipcMain.handle('selectFiles', async (event, options) => {
     title: options.title || 'Seleccionar archivos'
   });
   return result.canceled ? [] : result.filePaths;
+});
+
+ipcMain.handle('selectFolder', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory'],
+    title: 'Seleccionar carpeta de destino',
+    defaultPath: lastOutputDir || undefined
+  });
+  return result.canceled ? null : result.filePaths[0];
 });
 
 ipcMain.handle('saveFileDialog', async (event, options) => {
@@ -102,6 +122,25 @@ ipcMain.handle('renderVideo', async (event, project, timeline, fontPath, outputP
   }
 });
 
+ipcMain.handle('renderAllOutputs', async (event, project, timeline, fontPath, outputDir) => {
+  try {
+    const result = await renderAllOutputs(project, timeline, fontPath, outputDir, (progress, current, total, currentOutput, totalOutputs, resolution) => {
+      event.sender.send('render-progress', { progress, current, total, currentOutput, totalOutputs, resolution });
+    });
+
+    const { app: electronApp } = require('electron');
+    const settingsPath = path.join(electronApp.getPath('userData'), 'settings.json');
+    try {
+      const fs = require('fs');
+      fs.writeFileSync(settingsPath, JSON.stringify({ lastOutputDir: outputDir }, null, 2));
+    } catch (e) {}
+
+    return { success: true, ...result };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
 ipcMain.handle('renderPreview', async (event, project, timeline, fontPath, outputPath) => {
   try {
     const result = await renderPreview(project, timeline, fontPath, outputPath, (progress) => {
@@ -128,4 +167,8 @@ ipcMain.handle('getDefaultConfig', () => {
 
 ipcMain.handle('getFontPath', () => {
   return path.join(__dirname, 'assets', 'fonts', 'DejaVuSans-Bold.ttf');
+});
+
+ipcMain.handle('getLastOutputDir', () => {
+  return lastOutputDir;
 });
