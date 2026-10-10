@@ -3,9 +3,8 @@ name: Build Video Maker
 on:
   push:
     branches: [main]
-  workflow_dispatch:
-  tag:
     tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: write
