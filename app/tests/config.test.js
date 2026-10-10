@@ -5,6 +5,7 @@ describe('config.schema', () => {
   describe('getDefaultConfig', () => {
     it('returns correct defaults', () => {
       const config = getDefaultConfig();
+      expect(config.outputs).toEqual(['9:16', '16:9']);
       expect(config.resolution).toBe('9:16');
       expect(config.fps).toBe(30);
       expect(config.imageFit).toBe('cover');
@@ -38,6 +39,7 @@ describe('config.schema', () => {
 
     it('applies default config', () => {
       const result = validateProject(validProject);
+      expect(result.config.outputs).toEqual(['9:16', '16:9']);
       expect(result.config.resolution).toBe('9:16');
       expect(result.config.fps).toBe(30);
     });
@@ -54,7 +56,8 @@ describe('config.schema', () => {
       const exts = ['png', 'jpg', 'jpeg', 'webp', 'mp4'];
       exts.forEach(ext => {
         const result = validateProject({ ...validProject, images: [`scene.${ext}`] });
-        expect(result.images[0]).toBe(`scene.${ext}`);
+        expect(result.images[0].file).toBe(`scene.${ext}`);
+        expect(result.images[0].focus).toEqual({ x: 0.5, y: 0.5 });
       });
     });
 
@@ -160,6 +163,31 @@ describe('config.schema', () => {
         sceneDurationOverrides: { '0': 5.5, '2': 3.0 }
       });
       expect(result.sceneDurationOverrides['0']).toBe(5.5);
+    });
+
+    it('accepts outputs instead of resolution', () => {
+      const result = validateProject({
+        ...validProject,
+        config: { outputs: ['16:9', '1:1'] }
+      });
+      expect(result.config.outputs).toEqual(['16:9', '1:1']);
+    });
+
+    it('accepts fitMode', () => {
+      const result = validateProject({
+        ...validProject,
+        config: { fitMode: 'blur' }
+      });
+      expect(result.config.fitMode).toBe('blur');
+    });
+
+    it('accepts images with focus point', () => {
+      const result = validateProject({
+        ...validProject,
+        images: [{ file: 'scene1.png', focus: { x: 0.3, y: 0.7 } }, 'scene2.png']
+      });
+      expect(result.images[0]).toEqual({ file: 'scene1.png', focus: { x: 0.3, y: 0.7 } });
+      expect(result.images[1]).toEqual({ file: 'scene2.png', focus: { x: 0.5, y: 0.5 } });
     });
   });
 });

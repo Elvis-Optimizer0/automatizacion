@@ -150,7 +150,7 @@ function validateSceneDurations(durations, transitionDuration) {
 }
 
 function buildTimeline(project, audioDuration) {
-  const { images, script, config, sceneDurationOverrides, sceneOverrides } = project;
+  const { images, script, config, sceneDurationOverrides, sceneOverrides = {} } = project;
   const N = images.length;
   const transitionDuration = config.transition.duration;
 

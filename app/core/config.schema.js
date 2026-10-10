@@ -52,6 +52,7 @@ const ImageWithFocusSchema = z.object({
 
 const ConfigSchema = z.object({
   outputs: z.array(z.enum(['9:16', '16:9', '1:1'])).min(1).max(3).default(['9:16', '16:9']),
+  resolution: z.enum(['9:16', '16:9', '1:1']).optional().default('9:16'),
   fitMode: z.enum(['crop', 'blur']).default('crop'),
   fps: z.number().int().positive().default(30),
   imageFit: z.enum(['cover', 'contain']).default('cover'),
@@ -79,6 +80,7 @@ const ProjectSchema = z.object({
 
 const DEFAULT_CONFIG = {
   outputs: ['9:16', '16:9'],
+  resolution: '9:16',
   fitMode: 'crop',
   fps: 30,
   imageFit: 'cover',
@@ -111,10 +113,17 @@ const DEFAULT_CONFIG = {
 function migrateProject(data) {
   if (data.config && data.config.resolution && !data.config.outputs) {
     data.config.outputs = [data.config.resolution];
-    delete data.config.resolution;
   }
-  if (data.images && data.images.length > 0 && typeof data.images[0] === 'string') {
-    data.images = data.images.map(file => ({ file, focus: { x: 0.5, y: 0.5 } }));
+  if (data.config && data.config.outputs && !data.config.resolution) {
+    data.config.resolution = data.config.outputs[0];
+  }
+  if (data.images && data.images.length > 0) {
+    data.images = data.images.map(img => {
+      if (typeof img === 'string') {
+        return { file: img, focus: { x: 0.5, y: 0.5 } };
+      }
+      return img;
+    });
   }
   return data;
 }
