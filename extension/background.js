@@ -1,4 +1,6 @@
 const STORAGE_KEY = 'promptQueueState';
+const LOG_KEY = 'colaPromptsLogs';
+const MAX_LOGS = 50;
 
 const defaultState = {
   queue: [],
@@ -15,7 +17,8 @@ const defaultState = {
     submit: null,
     resultImage: null,
     busyIndicator: null
-  }
+  },
+  selectorMeta: {}
 };
 
 async function getState() {
@@ -29,6 +32,14 @@ async function saveState(state) {
 
 async function notifyPopup(state) {
   chrome.runtime.sendMessage({ type: 'STATE_UPDATE', state }).catch(() => {});
+}
+
+function addLog(message) {
+  chrome.storage.local.get(LOG_KEY, (data) => {
+    const logs = (data[LOG_KEY] || []).slice(-MAX_LOGS + 1);
+    logs.push(message);
+    chrome.storage.local.set({ [LOG_KEY]: logs });
+  });
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -136,6 +147,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       case 'SAVE_SELECTORS': {
         state.selectors = { ...state.selectors, ...message.selectors };
+        if (message.selectorMeta) {
+          state.selectorMeta = { ...state.selectorMeta, ...message.selectorMeta };
+        }
         await saveState(state);
         await notifyPopup(state);
         sendResponse({ success: true });
@@ -154,7 +168,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
 
       case 'EXPORT_STATE': {
-        sendResponse({ state: JSON.stringify(state, null, 2) });
+        const fullState = await getState();
+        sendResponse({ state: JSON.stringify(fullState, null, 2) });
         break;
       }
 

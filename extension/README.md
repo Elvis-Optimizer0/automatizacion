@@ -1,6 +1,6 @@
 # Cola de Prompts para Flow - Extensión de Chrome
 
-Extensión Manifest V3 para automatizar el envío secuencial de prompts a Google Flow.
+Extensión Manifest V3 para automatizar el envío secuencial de prompts a Google Flow. Versión **1.1.0**.
 
 ## Instalación
 
@@ -12,6 +12,8 @@ Extensión Manifest V3 para automatizar el envío secuencial de prompts a Google
 6. Fija el icono en la barra de herramientas
 
 > **Nota:** Firefox no es compatible (usa Manifest V3 con service workers y APIs específicas de Chromium).
+
+> **Importante:** Tras actualizar los archivos de la extensión, pulsa el botón **⟳ Recargar** en `chrome://extensions` y verifica que en el pie del popup aparezca `v1.1.0`.
 
 ## Uso
 
@@ -56,6 +58,8 @@ La calibración genera selectores CSS robustos priorizando:
 
 Para la imagen de resultado usa un selector genérico que coincida con **todas** las imágenes generadas.
 
+Soporta **shadow DOM** (separador ` >>> `) y **iframes** (guarda `frameUrl`).
+
 ## Escritura de prompts
 
 Maneja tres tipos de elementos:
@@ -75,9 +79,40 @@ Combina:
 5. Timeout → error `TIMEOUT`
 6. Alertas/toasts de error → error `FLOW_ERROR`
 
+## Panel de diagnóstico
+
+El popup incluye:
+- **Indicador de estado** (verde/amarillo/rojo) con detección por PING y inyección bajo demanda
+- **Sección Selectores** con badges ✔/✖, botones **Probar** y **Autodetectar**
+- **Registro** (logs en vivo con colores)
+- **Diagnóstico** plegable con botón **Copiar diagnóstico** (JSON completo)
+
 ## Pruebas
 
-Abre `test/mock-flow.html` en el navegador y usa la extensión contra él. Una cola de 5 prompts debe terminar con 5 `done` en orden.
+Abre `test/mock-flow.html` en el navegador y usa la extensión contra él. Incluye tres variantes:
+1. DOM normal
+2. Shadow DOM (formulario dentro de shadow root abierto)
+3. Iframe (mismo origen)
+
+Una cola de 5 prompts debe terminar con 5 `done` en orden.
+
+### Tests unitarios (jsdom)
+
+```bash
+npm test
+```
+
+Cubren: `buildSelector`/`buildSelectorWithShadow`, `deepQuerySelectorAll` con shadow DOM de dos niveles, máquina de estados de calibración (3 pasos, clic inválido no avanza, Cancelar/Esc, timeout 120s), handler PING, `ensureInjected`.
+
+## Si dice que no hay conexión
+
+Si el indicador muestra rojo **"No se pudo conectar con la página"**:
+
+1. **Comprueba la URL**: Debe ser `https://labs.google/fx/tools/flow...` o `https://flow.google/...`. La extensión solo funciona en esos dominios.
+2. **Recarga la extensión**: En `chrome://extensions` pulsa el icono **⟳ Recargar** de "Cola de prompts". Verifica que el pie del popup muestre `v1.1.0`.
+3. **Recarga la pestaña de Flow**: Pulsa F5 en la pestaña de Flow tras recargar la extensión.
+4. **Acceso al sitio**: En `chrome://extensions` → Detalles de "Cola de prompts" → **Acceso al sitio**, pon **"En todos los sitios"** si la opción existe.
+5. **Copia el diagnóstico**: En el popup, abre **Diagnóstico** → **Copiar diagnóstico** y compártelo para depurar.
 
 ## Limitaciones y responsabilidad
 

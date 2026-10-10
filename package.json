@@ -1,12 +1,13 @@
 {
   "name": "video-maker",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Video Maker - App de escritorio para crear videos con zoom, transiciones y overlays",
   "main": "app/main.js",
   "author": "Elvis-Optimizer0",
   "scripts": {
     "start": "electron app/main.js",
     "test": "vitest run",
+    "test:extension": "vitest run extension/tests",
     "dist": "electron-builder --win --x64 --publish never"
   },
   "build": {
@@ -45,7 +46,8 @@
   "devDependencies": {
     "electron": "44.7.0",
     "electron-builder": "26.15.3",
-    "vitest": "5.0.3"
+    "vitest": "5.0.3",
+    "jsdom": "24.0.0"
   },
   "engines": {
     "node": "20.x"

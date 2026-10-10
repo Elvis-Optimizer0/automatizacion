@@ -3,15 +3,58 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cola de Prompts</title>
+  <title>Cola de prompts</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
   <div class="popup-container">
     <header class="popup-header">
-      <h1>Cola de Prompts</h1>
-      <span class="flow-status" id="flow-status">Flow no detectado</span>
+      <h1>Cola de prompts</h1>
+      <div class="status-indicator" id="status-indicator">
+        <span class="status-dot"></span>
+        <span class="status-text">Conectando...</span>
+      </div>
     </header>
+
+    <section class="section" id="selectors-section">
+      <div class="section-header">
+        <h2>Selectores</h2>
+      </div>
+      <div class="selector-row" data-key="input">
+        <div class="selector-info">
+          <span class="selector-label">Caja de texto</span>
+          <span class="selector-badge" id="badge-input">✖</span>
+        </div>
+        <div class="selector-actions">
+          <button class="btn btn-sm btn-secondary" data-action="test" data-key="input">Probar</button>
+        </div>
+        <div class="selector-meta" id="meta-input"></div>
+      </div>
+      <div class="selector-row" data-key="submit">
+        <div class="selector-info">
+          <span class="selector-label">Botón generar</span>
+          <span class="selector-badge" id="badge-submit">✖</span>
+        </div>
+        <div class="selector-actions">
+          <button class="btn btn-sm btn-secondary" data-action="test" data-key="submit">Probar</button>
+        </div>
+        <div class="selector-meta" id="meta-submit"></div>
+      </div>
+      <div class="selector-row" data-key="resultImage">
+        <div class="selector-info">
+          <span class="selector-label">Imagen resultado</span>
+          <span class="selector-badge" id="badge-resultImage">✖</span>
+        </div>
+        <div class="selector-actions">
+          <button class="btn btn-sm btn-secondary" data-action="test" data-key="resultImage">Probar</button>
+        </div>
+        <div class="selector-meta" id="meta-resultImage"></div>
+      </div>
+      <div class="selector-buttons">
+        <button class="btn btn-primary" id="calibrate-btn">Calibrar</button>
+        <button class="btn btn-secondary" id="autodetect-btn">Autodetectar</button>
+      </div>
+    </section>
 
     <section class="section">
       <div class="section-header">
@@ -24,16 +67,6 @@
         <button class="btn btn-secondary" id="export-state">Exportar estado .json</button>
       </div>
       <input type="file" id="import-file" accept=".txt,.json" hidden>
-    </section>
-
-    <section class="section">
-      <div class="section-header">
-        <h2>Calibración</h2>
-      </div>
-      <p class="calibration-hint" id="calibration-hint">Primero calibra los selectores en la página de Flow</p>
-      <div class="calibration-buttons">
-        <button class="btn btn-primary" id="calibrate-btn">Calibrar</button>
-      </div>
     </section>
 
     <section class="section">
@@ -62,8 +95,23 @@
       </div>
     </section>
 
+    <section class="section">
+      <details class="collapsible" open>
+        <summary>Registro</summary>
+        <div class="log-container" id="log-container"></div>
+      </details>
+    </section>
+
     <section class="section settings-section">
-      <details>
+      <details class="collapsible">
+        <summary>Diagnóstico</summary>
+        <div class="diagnostic-content" id="diagnostic-content"></div>
+        <button class="btn btn-secondary" id="copy-diagnostic">Copiar diagnóstico</button>
+      </details>
+    </section>
+
+    <section class="section settings-section">
+      <details class="collapsible">
         <summary>Ajustes</summary>
         <div class="settings-grid">
           <label>Delay entre prompts (ms)<input type="number" id="setting-delay" min="1000" max="60000" step="500" value="3000"></label>
@@ -73,6 +121,10 @@
         </div>
       </details>
     </section>
+
+    <footer class="popup-footer">
+      <span id="extension-version">v1.1.0</span>
+    </footer>
   </div>
 
   <script src="popup.js"></script>

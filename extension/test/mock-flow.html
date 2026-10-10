@@ -7,8 +7,11 @@
   <style>
     * { box-sizing: border-box; }
     body { font-family: system-ui, sans-serif; padding: 20px; background: #f5f5f5; }
-    .container { max-width: 800px; margin: 0 auto; background: white; padding: 24px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-    h1 { margin-bottom: 24px; color: #333; }
+    .container { max-width: 900px; margin: 0 auto; background: white; padding: 24px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    h1 { margin-bottom: 8px; color: #333; }
+    h2 { margin: 24px 0 12px; color: #555; font-size: 1.2rem; border-bottom: 1px solid #eee; padding-bottom: 8px; }
+    .variant { border: 1px dashed #ccc; border-radius: 8px; padding: 16px; margin-bottom: 24px; background: #fafafa; }
+    .variant-title { font-weight: 600; margin-bottom: 12px; color: #666; }
     .prompt-input { width: 100%; min-height: 100px; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-family: inherit; font-size: 14px; resize: vertical; margin-bottom: 16px; }
     .generate-btn { padding: 12px 24px; background: #6366F1; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.2s; }
     .generate-btn:hover:not(:disabled) { background: #4f46e5; }
@@ -20,28 +23,43 @@
     .status { margin-top: 12px; padding: 8px 12px; border-radius: 6px; font-size: 13px; }
     .status.generating { background: #eef2ff; color: #4f46e5; }
     .status.ready { background: #ecfdf5; color: #065f46; }
+    .shadow-host { border: 2px solid #6366F1; border-radius: 8px; padding: 16px; background: #f8f9ff; }
+    iframe { width: 100%; height: 400px; border: 1px solid #ddd; border-radius: 8px; background: white; }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>Mock Google Flow</h1>
-    <p>Esta página simula la interfaz de Google Flow para probar la extensión.</p>
+    <h1>Mock Google Flow - Test Variants</h1>
+    <p>Esta página simula la interfaz de Google Flow para probar la extensión con tres variantes:</p>
 
-    <textarea class="prompt-input" id="prompt-input" placeholder="Escribe tu prompt aquí..."></textarea>
-    <br>
-    <button class="generate-btn" id="generate-btn">Generar imagen</button>
+    <!-- Variant 1: Normal DOM -->
+    <div class="variant">
+      <h2>Variante 1: DOM Normal</h2>
+      <div class="prompt-input-wrap">
+        <textarea class="prompt-input" id="prompt-input-1" placeholder="Escribe tu prompt aquí..."></textarea>
+        <br>
+        <button class="generate-btn" id="generate-btn-1">Generar imagen</button>
+      </div>
+      <div class="status" id="status-1"></div>
+      <div class="results" id="results-1"></div>
+    </div>
 
-    <div class="status" id="status"></div>
+    <!-- Variant 2: Shadow DOM -->
+    <div class="variant">
+      <h2>Variante 2: Shadow DOM</h2>
+      <p class="variant-title">El formulario está dentro de un Shadow DOM (abierto)</p>
+      <div class="shadow-host" id="shadow-host"></div>
+    </div>
 
-    <div class="results" id="results"></div>
+    <!-- Variant 3: Iframe -->
+    <div class="variant">
+      <h2>Variante 3: Iframe</h2>
+      <p class="variant-title">El formulario está dentro de un iframe (mismo origen)</p>
+      <iframe id="test-iframe" srcdoc=""></iframe>
+    </div>
   </div>
 
   <script>
-    const promptInput = document.getElementById('prompt-input');
-    const generateBtn = document.getElementById('generate-btn');
-    const status = document.getElementById('status');
-    const results = document.getElementById('results');
-
     const placeholderImages = [
       'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgZmlsbD0iIzYzNjZGMSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiIgZm9udC1zaXplPSIyNCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPkltYWdlbiAxPC90ZXh0Pjwvc3ZnPg==',
       'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgZmlsbD0iIzIyYzU1ZSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiIgZm9udC1zaXplPSIyNCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPkltYWdlbiAyPC90ZXh0Pjwvc3ZnPg==',
@@ -52,29 +70,103 @@
 
     let imageIndex = 0;
 
-    generateBtn.addEventListener('click', async () => {
-      const prompt = promptInput.value.trim();
-      if (!prompt) return;
+    function createFlowUI(root, suffix) {
+      const promptInput = root.getElementById(`prompt-input-${suffix}`);
+      const generateBtn = root.getElementById(`generate-btn-${suffix}`);
+      const status = root.getElementById(`status-${suffix}`);
+      const results = root.getElementById(`results-${suffix}`);
 
-      generateBtn.disabled = true;
-      generateBtn.innerHTML = '<span class="spinner"></span>Generando...';
-      status.textContent = `Generando imagen para: "${prompt.substring(0, 50)}..."`;
-      status.className = 'status generating';
+      if (!promptInput || !generateBtn) return;
 
-      await new Promise(r => setTimeout(r, 4000));
+      generateBtn.addEventListener('click', async () => {
+        const prompt = promptInput.value.trim();
+        if (!prompt) return;
 
-      const img = document.createElement('img');
-      img.src = placeholderImages[imageIndex % placeholderImages.length];
-      img.className = 'result-img';
-      img.alt = `Generated image ${imageIndex + 1}`;
-      results.appendChild(img);
-      imageIndex++;
+        generateBtn.disabled = true;
+        generateBtn.innerHTML = '<span class="spinner"></span>Generando...';
+        status.textContent = `Generando imagen para: "${prompt.substring(0, 50)}..."`;
+        status.className = 'status generating';
 
-      generateBtn.disabled = false;
-      generateBtn.textContent = 'Generar imagen';
-      status.textContent = `Imagen ${imageIndex} generada ✓`;
-      status.className = 'status ready';
-    });
+        await new Promise(r => setTimeout(r, 4000));
+
+        const img = document.createElement('img');
+        img.src = placeholderImages[imageIndex % placeholderImages.length];
+        img.className = 'result-img';
+        img.alt = `Generated image ${imageIndex + 1}`;
+        results.appendChild(img);
+        imageIndex++;
+
+        generateBtn.disabled = false;
+        generateBtn.textContent = 'Generar imagen';
+        status.textContent = `Imagen ${imageIndex} generada ✓`;
+        status.className = 'status ready';
+      });
+    }
+
+    // Variant 1: Normal DOM
+    createFlowUI(document, 1);
+
+    // Variant 2: Shadow DOM
+    const shadowHost = document.getElementById('shadow-host');
+    const shadowRoot = shadowHost.attachShadow({ mode: 'open' });
+    shadowRoot.innerHTML = `
+      <style>
+        * { box-sizing: border-box; }
+        .prompt-input { width: 100%; min-height: 100px; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-family: inherit; font-size: 14px; resize: vertical; margin-bottom: 16px; }
+        .generate-btn { padding: 12px 24px; background: #6366F1; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.2s; }
+        .generate-btn:hover:not(:disabled) { background: #4f46e5; }
+        .generate-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid transparent; border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .results { margin-top: 24px; display: flex; flex-wrap: wrap; gap: 12px; }
+        .result-img { width: 180px; height: 180px; object-fit: cover; border-radius: 8px; border: 1px solid #eee; background: #f0f0f0; }
+        .status { margin-top: 12px; padding: 8px 12px; border-radius: 6px; font-size: 13px; }
+        .status.generating { background: #eef2ff; color: #4f46e5; }
+        .status.ready { background: #ecfdf5; color: #065f46; }
+      </style>
+      <textarea class="prompt-input" id="prompt-input-2" placeholder="Escribe tu prompt aquí (Shadow DOM)..."></textarea>
+      <br>
+      <button class="generate-btn" id="generate-btn-2">Generar imagen</button>
+      <div class="status" id="status-2"></div>
+      <div class="results" id="results-2"></div>
+    `;
+    createFlowUI(shadowRoot, 2);
+
+    // Variant 3: Iframe
+    const iframe = document.getElementById('test-iframe');
+    iframe.onload = () => {
+      createFlowUI(iframe.contentDocument, 3);
+    };
+    iframe.srcdoc = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <style>
+          * { box-sizing: border-box; }
+          body { font-family: system-ui, sans-serif; padding: 20px; background: #f5f5f5; }
+          .prompt-input { width: 100%; min-height: 100px; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-family: inherit; font-size: 14px; resize: vertical; margin-bottom: 16px; }
+          .generate-btn { padding: 12px 24px; background: #6366F1; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.2s; }
+          .generate-btn:hover:not(:disabled) { background: #4f46e5; }
+          .generate-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+          .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid transparent; border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle; }
+          @keyframes spin { to { transform: rotate(360deg); } }
+          .results { margin-top: 24px; display: flex; flex-wrap: wrap; gap: 12px; }
+          .result-img { width: 180px; height: 180px; object-fit: cover; border-radius: 8px; border: 1px solid #eee; background: #f0f0f0; }
+          .status { margin-top: 12px; padding: 8px 12px; border-radius: 6px; font-size: 13px; }
+          .status.generating { background: #eef2ff; color: #4f46e5; }
+          .status.ready { background: #ecfdf5; color: #065f46; }
+        </style>
+      </head>
+      <body>
+        <textarea class="prompt-input" id="prompt-input-3" placeholder="Escribe tu prompt aquí (Iframe)..."></textarea>
+        <br>
+        <button class="generate-btn" id="generate-btn-3">Generar imagen</button>
+        <div class="status" id="status-3"></div>
+        <div class="results" id="results-3"></div>
+      </body>
+      </html>
+    `;
   </script>
 </body>
 </html>
