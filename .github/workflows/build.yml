@@ -22,25 +22,22 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: video-maker/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install dependencies
-        working-directory: video-maker
         run: npm ci
 
       - name: Run tests
-        working-directory: video-maker
         run: npm test
 
       - name: Build executable
-        working-directory: video-maker
         run: npm run dist
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: videomaker-exe
-          path: video-maker/dist/*.exe
+          path: dist/*.exe
           retention-days: 30
 
   extension:
@@ -50,7 +47,6 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Package extension
-        working-directory: video-maker
         run: |
           cd extension
           zip -r ../cola-prompts-extension.zip . -x "test/*" "test/**/*" "*.md" "README.md"
@@ -59,7 +55,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cola-prompts-extension
-          path: video-maker/cola-prompts-extension.zip
+          path: cola-prompts-extension.zip
           retention-days: 30
 
   release:
