@@ -1,0 +1,146 @@
+const { spawn } = require('child_process');
+const path = require('path');
+const { getFfmpegPath, getFfprobePath } = require('./binaries');
+const { buildFfmpegArgs } = require('./ffmpeg-builder');
+
+function getAudioDuration(audioPath) {
+  return new Promise((resolve, reject) => {
+    const ffprobe = getFfprobePath();
+    const args = [
+      '-v', 'error',
+      '-show_entries', 'format=duration',
+      '-of', 'default=noprint_wrappers=1:nokey=1',
+      audioPath
+    ];
+
+    const proc = spawn(ffprobe, args, { windowsHide: true });
+    let stdout = '';
+    let stderr = '';
+
+    proc.stdout.on('data', data => stdout += data.toString());
+    proc.stderr.on('data', data => stderr += data.toString());
+
+    proc.on('close', code => {
+      if (code !== 0) {
+        reject(new Error(`E_FFMPEG_MISSING: ffprobe falló: ${stderr}`));
+        return;
+      }
+      const duration = parseFloat(stdout.trim());
+      if (isNaN(duration)) {
+        reject(new Error(`E_FFMPEG_MISSING: No se pudo obtener duración de ${audioPath}`));
+        return;
+      }
+      resolve(duration);
+    });
+
+    proc.on('error', err => {
+      reject(new Error(`E_FFMPEG_MISSING: ffprobe no encontrado: ${err.message}`));
+    });
+  });
+}
+
+function renderVideo(project, timeline, fontPath, outputPath, onProgress) {
+  return new Promise((resolve, reject) => {
+    const args = buildFfmpegArgs(project, timeline, fontPath, outputPath);
+    const ffmpeg = getFfmpegPath();
+
+    const proc = spawn(ffmpeg, args, { windowsHide: true });
+
+    let stderr = '';
+    let lastProgress = 0;
+
+    proc.stdout.on('data', data => {
+      const lines = data.toString().split('\n');
+      for (const line of lines) {
+        if (line.startsWith('out_time_ms=')) {
+          const ms = parseInt(line.split('=')[1], 10);
+          if (!isNaN(ms) && timeline.audioDuration > 0) {
+            const progress = Math.min(100, (ms / 1000) / timeline.audioDuration * 100);
+            if (progress !== lastProgress && onProgress) {
+              lastProgress = progress;
+              onProgress(progress, ms / 1e6, timeline.audioDuration);
+            }
+          }
+        } else if (line.startsWith('progress=')) {
+          if (line.includes('end') && onProgress) {
+            onProgress(100, timeline.audioDuration, timeline.audioDuration);
+          }
+        }
+      }
+    });
+
+    proc.stderr.on('data', data => {
+      stderr += data.toString();
+    });
+
+    proc.on('close', code => {
+      if (code !== 0) {
+        reject(new Error(`E_FFMPEG_MISSING: FFmpeg falló (código ${code}): ${stderr}`));
+        return;
+      }
+      resolve({ success: true, outputPath });
+    });
+
+    proc.on('error', err => {
+      reject(new Error(`E_FFMPEG_MISSING: FFmpeg no encontrado: ${err.message}`));
+    });
+  });
+}
+
+function renderPreview(project, timeline, fontPath, outputPath, onProgress) {
+  const previewProject = {
+    ...project,
+    config: {
+      ...project.config,
+      resolution: project.config.resolution
+    }
+  };
+
+  const previewTimeline = {
+    ...timeline,
+    scenes: timeline.scenes.map(s => ({
+      ...s,
+      duration: Math.min(s.duration, 10)
+    }))
+  };
+
+  const args = buildFfmpegArgs(previewProject, previewTimeline, fontPath, outputPath);
+  const ffmpeg = getFfmpegPath();
+
+  return new Promise((resolve, reject) => {
+    const proc = spawn(ffmpeg, args.map(a => a === 'medium' ? 'ultrafast' : a === '20' ? '28' : a), { windowsHide: true });
+
+    let stderr = '';
+
+    proc.stdout.on('data', data => {
+      const lines = data.toString().split('\n');
+      for (const line of lines) {
+        if (line.startsWith('out_time_ms=') && onProgress) {
+          const ms = parseInt(line.split('=')[1], 10);
+          if (!isNaN(ms) && timeline.audioDuration > 0) {
+            const progress = Math.min(100, (ms / 1000) / timeline.audioDuration * 100);
+            onProgress(progress);
+          }
+        }
+      }
+    });
+
+    proc.stderr.on('data', data => {
+      stderr += data.toString();
+    });
+
+    proc.on('close', code => {
+      if (code !== 0) {
+        reject(new Error(`E_FFMPEG_MISSING: FFmpeg falló (código ${code}): ${stderr}`));
+        return;
+      }
+      resolve({ success: true, outputPath });
+    });
+
+    proc.on('error', err => {
+      reject(new Error(`E_FFMPEG_MISSING: FFmpeg no encontrado: ${err.message}`));
+    });
+  });
+}
+
+module.exports = { renderVideo, renderPreview, getAudioDuration };

@@ -1,0 +1,131 @@
+const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const path = require('node:path');
+const { verifyBinaries } = require('./core/binaries');
+const { validateProject, getDefaultConfig } = require('./core/config.schema');
+const { buildTimeline } = require('./core/timeline');
+const { renderVideo, renderPreview, getAudioDuration } = require('./core/render');
+
+let mainWindow = null;
+
+function createWindow() {
+  mainWindow = new BrowserWindow({
+    width: 1100,
+    height: 800,
+    minWidth: 900,
+    minHeight: 650,
+    title: 'Video Maker',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false
+    },
+    icon: path.join(__dirname, 'assets', 'icon.png')
+  });
+
+  mainWindow.loadFile(path.join(__dirname, 'ui', 'index.html'));
+
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
+}
+
+app.whenReady().then(async () => {
+  try {
+    verifyBinaries();
+  } catch (err) {
+    console.error('Error verificando binarios:', err.message);
+  }
+
+  createWindow();
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
+});
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'win32') app.quit();
+});
+
+ipcMain.handle('selectFiles', async (event, options) => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openFile', 'multiSelections', ...(options.properties || [])],
+    filters: options.filters || [
+      { name: 'Imágenes y Video', extensions: ['png', 'jpg', 'jpeg', 'webp', 'mp4'] },
+      { name: 'Audio', extensions: ['mp3', 'wav', 'm4a', 'aac'] },
+      { name: 'Todos', extensions: ['*'] }
+    ],
+    title: options.title || 'Seleccionar archivos'
+  });
+  return result.canceled ? [] : result.filePaths;
+});
+
+ipcMain.handle('saveFileDialog', async (event, options) => {
+  const result = await dialog.showSaveDialog(mainWindow, {
+    filters: options.filters || [{ name: 'Video MP4', extensions: ['mp4'] }],
+    defaultPath: options.defaultPath || 'video.mp4',
+    title: options.title || 'Guardar video'
+  });
+  return result.canceled ? null : result.filePath;
+});
+
+ipcMain.handle('openFolder', async (event, folderPath) => {
+  const { shell } = require('electron');
+  await shell.openPath(folderPath);
+});
+
+ipcMain.handle('buildTimeline', async (event, project) => {
+  try {
+    const validated = validateProject(project);
+    const audioDuration = await getAudioDuration(validated.narration);
+    const timeline = buildTimeline(validated, audioDuration);
+
+    if (timeline.durationDiff > 0.2) {
+      throw new Error(`E_DURATION_MISMATCH: Duración final (${timeline.totalDuration.toFixed(2)}s) difiere del audio (${audioDuration.toFixed(2)}s) en más de 0.2s`);
+    }
+
+    return { success: true, timeline };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('renderVideo', async (event, project, timeline, fontPath, outputPath) => {
+  try {
+    const result = await renderVideo(project, timeline, fontPath, outputPath, (progress, current, total) => {
+      event.sender.send('render-progress', { progress, current, total });
+    });
+    return { success: true, ...result };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('renderPreview', async (event, project, timeline, fontPath, outputPath) => {
+  try {
+    const result = await renderPreview(project, timeline, fontPath, outputPath, (progress) => {
+      event.sender.send('preview-progress', { progress });
+    });
+    return { success: true, ...result };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('getAudioDuration', async (event, audioPath) => {
+  try {
+    const duration = await getAudioDuration(audioPath);
+    return { success: true, duration };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('getDefaultConfig', () => {
+  return getDefaultConfig();
+});
+
+ipcMain.handle('getFontPath', () => {
+  return path.join(__dirname, 'assets', 'fonts', 'DejaVuSans-Bold.ttf');
+});

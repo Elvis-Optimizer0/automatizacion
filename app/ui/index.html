@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Video Maker</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <h1>Video Maker</h1>
+    </header>
+
+    <main class="app-main">
+      <section class="card" id="section-images">
+        <div class="card-header">
+          <span class="section-number">1</span>
+          <h2>Imágenes</h2>
+        </div>
+        <div class="drop-zone" id="images-dropzone">
+          <input type="file" id="images-input" multiple accept="image/png,image/jpeg,image/webp,video/mp4" hidden>
+          <div class="drop-zone-content" id="images-drop-content">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <p>Arrastra imágenes y videos aquí o haz clic para seleccionar</p>
+            <span class="hint">PNG, JPG, WEBP, MP4 · Orden = orden de escenas</span>
+          </div>
+          <div class="drop-zone-preview" id="images-preview" hidden>
+            <div class="preview-grid" id="images-grid"></div>
+            <div class="preview-actions">
+              <button class="btn btn-secondary" id="clear-images">Quitar todas</button>
+            </div>
+          </div>
+        </div>
+        <p class="status-text" id="images-status">Sin archivos</p>
+      </section>
+
+      <section class="card" id="section-audio">
+        <div class="card-header">
+          <span class="section-number">2</span>
+          <h2>Audio</h2>
+        </div>
+        <div class="audio-zones">
+          <div class="audio-zone">
+            <label class="zone-label">Narración <span class="required">*</span></label>
+            <div class="drop-zone" id="narration-dropzone">
+              <input type="file" id="narration-input" accept="audio/mp3,audio/wav,audio/m4a,audio/aac" hidden>
+              <div class="drop-zone-content" id="narration-drop-content">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+                <p>Archivo de voz (obligatorio)</p>
+              </div>
+              <div class="file-info" id="narration-info" hidden>
+                <span class="file-name" id="narration-name"></span>
+                <span class="file-duration" id="narration-duration"></span>
+                <button class="btn-icon" id="clear-narration" title="Quitar">✕</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="audio-zone">
+            <label class="zone-label">Música de fondo</label>
+            <div class="drop-zone" id="music-dropzone">
+              <input type="file" id="music-input" accept="audio/mp3,audio/wav,audio/m4a,audio/aac" hidden>
+              <div class="drop-zone-content" id="music-drop-content">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 2v20"/><path d="M2 12h20"/></svg>
+                <p>Opcional</p>
+              </div>
+              <div class="file-info" id="music-info" hidden>
+                <span class="file-name" id="music-name"></span>
+                <span class="file-duration" id="music-duration"></span>
+                <button class="btn-icon" id="clear-music" title="Quitar">✕</button>
+              </div>
+            </div>
+            <div class="volume-control" id="music-volume-control" hidden>
+              <label>Volumen: <span id="music-volume-value">12%</span></label>
+              <input type="range" id="music-volume" min="0" max="100" value="12">
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card" id="section-script">
+        <div class="card-header">
+          <span class="section-number">3</span>
+          <h2>Guion</h2>
+        </div>
+        <div class="script-actions">
+          <button class="btn btn-secondary" id="paste-script">Pegar del portapapeles</button>
+          <button class="btn btn-secondary" id="load-script">Cargar .txt</button>
+        </div>
+        <textarea id="script-textarea" placeholder="Pega aquí el guion con timestamps (ej: (0:00) Texto de la escena...)" spellcheck="false"></textarea>
+        <div class="script-options">
+          <label class="toggle">
+            <input type="checkbox" id="fit-times" checked>
+            <span class="toggle-slider"></span>
+            Ajustar tiempos al largo del audio
+          </label>
+        </div>
+        <p class="status-text" id="script-status">0 escenas detectadas</p>
+        <input type="file" id="script-file-input" accept=".txt" hidden>
+      </section>
+
+      <section class="card" id="section-config">
+        <div class="card-header">
+          <span class="section-number">4</span>
+          <h2>Configuración</h2>
+        </div>
+
+        <div class="config-grid">
+          <div class="config-group">
+            <label>Resolución</label>
+            <div class="segmented" id="resolution-segmented">
+              <button class="segment active" data-value="9:16">9:16 Vertical</button>
+              <button class="segment" data-value="16:9">16:9 Horizontal</button>
+              <button class="segment" data-value="1:1">1:1 Cuadrado</button>
+            </div>
+          </div>
+
+          <div class="config-group">
+            <label>Zoom gradual</label>
+            <label class="toggle">
+              <input type="checkbox" id="zoom-enabled" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="config-group">
+            <label>Escala inicial: <span id="zoom-scale-value">122%</span></label>
+            <input type="range" id="zoom-scale" min="100" max="150" value="122">
+          </div>
+
+          <div class="config-group">
+            <label>Intensidad: <span id="zoom-intensity-value">10%</span></label>
+            <input type="range" id="zoom-intensity" min="0" max="50" value="10">
+          </div>
+
+          <div class="config-group">
+            <label>Modo de zoom</label>
+            <div class="segmented" id="zoom-mode-segmented">
+              <button class="segment active" data-value="fixed">Fijo</button>
+              <button class="segment" data-value="alternate">Alternar</button>
+              <button class="segment" data-value="random">Aleatorio</button>
+            </div>
+          </div>
+
+          <div class="config-group">
+            <label>Estilos de zoom</label>
+            <div class="chips" id="zoom-styles-chips">
+              <button class="chip active" data-value="kenburns">Ken Burns</button>
+              <button class="chip" data-value="zoomin">Zoom In</button>
+              <button class="chip" data-value="zoomout">Zoom Out</button>
+              <button class="chip" data-value="zoompulse">Zoom Pulse</button>
+              <button class="chip" data-value="panleft">Pan ←</button>
+              <button class="chip" data-value="panright">Pan →</button>
+              <button class="chip" data-value="panup">Pan ↑</button>
+              <button class="chip" data-value="pandown">Pan ↓</button>
+              <button class="chip" data-value="none">Sin zoom</button>
+            </div>
+          </div>
+
+          <div class="config-group">
+            <label>Modo de transición</label>
+            <div class="segmented" id="transition-mode-segmented">
+              <button class="segment active" data-value="fixed">Fijo</button>
+              <button class="segment" data-value="alternate">Alternar</button>
+              <button class="segment" data-value="random">Aleatorio</button>
+            </div>
+          </div>
+
+          <div class="config-group">
+            <label>Transiciones</label>
+            <div class="chips" id="transition-chips">
+              <button class="chip active" data-value="slidedown">Slide ↓</button>
+              <button class="chip" data-value="slideleft">Slide ←</button>
+              <button class="chip" data-value="slideright">Slide →</button>
+              <button class="chip" data-value="fade">Fundido</button>
+              <button class="chip" data-value="cut">Corte</button>
+            </div>
+          </div>
+
+          <div class="config-group">
+            <label>Duración transición: <span id="transition-duration-value">0.5s</span></label>
+            <input type="range" id="transition-duration" min="0.1" max="2" step="0.1" value="0.5">
+          </div>
+        </div>
+      </section>
+
+      <section class="card" id="section-extras">
+        <div class="card-header">
+          <span class="section-number">5</span>
+          <h2>Extras</h2>
+        </div>
+
+        <details class="collapsible" id="badges-section">
+          <summary>Botones animados</summary>
+          <div class="collapsible-content">
+            <div class="drop-zone" id="badges-dropzone">
+              <input type="file" id="badges-input" multiple accept="image/png" hidden>
+              <div class="drop-zone-content">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="20" height="20" rx="2"/><path d="M12 8v8M8 12h8"/></svg>
+                <p>Subir PNGs para botones (opcional)</p>
+              </div>
+              <div class="file-info" id="badges-info" hidden>
+                <span class="file-name" id="badges-count"></span>
+                <button class="btn-icon" id="clear-badges" title="Quitar">✕</button>
+              </div>
+            </div>
+            <div id="badges-list"></div>
+            <button class="btn btn-secondary" id="add-badge" hidden>Añadir botón</button>
+          </div>
+        </details>
+
+        <details class="collapsible" id="lower-third-section">
+          <summary>Franja inferior</summary>
+          <div class="collapsible-content">
+            <label class="toggle">
+              <input type="checkbox" id="lower-third-enabled">
+              <span class="toggle-slider"></span>
+              Habilitar franja inferior
+            </label>
+            <div class="config-group" id="lower-third-fields" hidden>
+              <label>Texto</label>
+              <input type="text" id="lower-third-text" value="@usuario" placeholder="@usuario">
+            </div>
+            <div class="config-group" id="lower-third-opacity-group" hidden>
+              <label>Opacidad: <span id="lower-third-opacity-value">55%</span></label>
+              <input type="range" id="lower-third-opacity" min="0" max="100" value="55">
+            </div>
+          </div>
+        </details>
+
+        <details class="collapsible" id="progress-bar-section">
+          <summary>Barra de progreso</summary>
+          <div class="collapsible-content">
+            <label class="toggle">
+              <input type="checkbox" id="progress-bar-enabled" checked>
+              <span class="toggle-slider"></span>
+              Habilitar barra de progreso
+            </label>
+            <div class="config-group" id="progress-bar-fields">
+              <label>Color</label>
+              <input type="color" id="progress-bar-color" value="#FF0000">
+            </div>
+            <div class="config-group">
+              <label>Altura: <span id="progress-bar-height-value">8px</span></label>
+              <input type="range" id="progress-bar-height" min="1" max="50" value="8">
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <section class="card" id="section-timeline">
+        <div class="card-header">
+          <span class="section-number">6</span>
+          <h2>Línea de tiempo y exportación</h2>
+        </div>
+
+        <button class="btn btn-primary" id="build-timeline">Generar línea de tiempo</button>
+
+        <div id="timeline-container" hidden>
+          <p class="timeline-factor" id="timeline-factor"></p>
+          <div class="table-wrapper">
+            <table class="timeline-table" id="timeline-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Miniatura</th>
+                  <th>Inicio</th>
+                  <th>Fin</th>
+                  <th>Duración</th>
+                  <th>Zoom</th>
+                  <th>Transición</th>
+                </tr>
+              </thead>
+              <tbody id="timeline-body"></tbody>
+            </table>
+          </div>
+
+          <div class="preview-section" id="preview-section" hidden>
+            <h3>Vista previa (540px, ultrafast)</h3>
+            <video id="preview-video" controls style="max-width: 100%; border-radius: 8px;"></video>
+            <div class="progress-bar-container" id="preview-progress" hidden>
+              <div class="progress-bar-fill" id="preview-progress-fill"></div>
+            </div>
+            <button class="btn btn-secondary" id="render-preview">Generar vista previa</button>
+          </div>
+
+          <div class="export-section">
+            <button class="btn btn-primary btn-large" id="export-video">Exportar MP4</button>
+            <div class="progress-bar-container" id="export-progress" hidden>
+              <div class="progress-bar-fill" id="export-progress-fill"></div>
+              <span class="progress-text" id="export-progress-text">0%</span>
+            </div>
+            <button class="btn btn-secondary" id="open-folder" hidden>Abrir carpeta</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <div id="error-toast" class="toast error hidden" role="alert"></div>
+      <div id="success-toast" class="toast success hidden" role="status"></div>
+    </footer>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cola de Prompts</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <header class="popup-header">
+      <h1>Cola de Prompts</h1>
+      <span class="flow-status" id="flow-status">Flow no detectado</span>
+    </header>
+
+    <section class="section">
+      <div class="section-header">
+        <h2>Prompts</h2>
+      </div>
+      <textarea id="prompts-textarea" placeholder="Un prompt por línea&#10;o&#10;PROMPT 1: texto&#10;PROMPT 2: texto" spellcheck="false"></textarea>
+      <div class="prompts-actions">
+        <button class="btn btn-primary" id="add-prompts">+ Añadir</button>
+        <button class="btn btn-secondary" id="import-prompts">Importar .txt</button>
+        <button class="btn btn-secondary" id="export-state">Exportar estado .json</button>
+      </div>
+      <input type="file" id="import-file" accept=".txt,.json" hidden>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <h2>Calibración</h2>
+      </div>
+      <p class="calibration-hint" id="calibration-hint">Primero calibra los selectores en la página de Flow</p>
+      <div class="calibration-buttons">
+        <button class="btn btn-primary" id="calibrate-btn">Calibrar</button>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <h2>Control</h2>
+      </div>
+      <div class="control-buttons">
+        <button class="btn btn-success" id="start-btn" disabled>▶ Iniciar</button>
+        <button class="btn btn-warning" id="pause-btn" disabled>⏸ Pausar</button>
+        <button class="btn btn-danger" id="stop-btn" disabled>⏹ Detener</button>
+      </div>
+      <div class="control-buttons">
+        <button class="btn btn-secondary" id="clear-btn">Limpiar cola</button>
+        <button class="btn btn-secondary" id="retry-btn">Reintentar errores</button>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-header">
+        <h2>Cola (<span id="done-count">0</span>/<span id="total-count">0</span>)</h2>
+      </div>
+      <div class="queue-list" id="queue-list"></div>
+      <div class="progress-info" id="progress-info" hidden>
+        <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+        <span class="progress-text" id="progress-text">Tiempo restante: calculando...</span>
+      </div>
+    </section>
+
+    <section class="section settings-section">
+      <details>
+        <summary>Ajustes</summary>
+        <div class="settings-grid">
+          <label>Delay entre prompts (ms)<input type="number" id="setting-delay" min="1000" max="60000" step="500" value="3000"></label>
+          <label>Timeout por prompt (ms)<input type="number" id="setting-timeout" min="30000" max="600000" step="5000" value="180000"></label>
+          <label>Reintentos máximos<input type="number" id="setting-retries" min="0" max="10" value="2"></label>
+          <label>Imágenes por prompt<input type="number" id="setting-images" min="1" max="4" value="1"></label>
+        </div>
+      </details>
+    </section>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

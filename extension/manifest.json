@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Cola de Prompts para Flow",
+  "version": "1.0.0",
+  "description": "Ejecuta una cola de prompts en Google Flow secuencialmente",
+  "permissions": ["storage", "activeTab", "scripting", "tabs"],
+  "host_permissions": ["https://labs.google/*", "https://*.google.com/*"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Cola de Prompts"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://labs.google/*", "https://*.google.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["selectors.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}
