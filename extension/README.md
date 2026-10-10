@@ -1,122 +1,105 @@
-# Cola de Prompts para Flow - Extensión de Chrome
+# Cola de prompts — Extensión Universal (v2.0.0)
 
-Extensión Manifest V3 para automatizar el envío secuencial de prompts a Google Flow. Versión **1.1.0**.
+Extensión de Chromium (Chrome, Edge, Brave, Opera) que ejecuta una lista de prompts en **cualquier página web** que tenga una caja de texto y un botón de enviar. Funciona con generadores de imágenes, chats de IA, formularios, etc.
 
 ## Instalación
 
 1. Descarga y descomprime `cola-prompts-extension.zip`
-2. Abre `chrome://extensions` (o `edge://extensions`, `brave://extensions`, `opera://extensions`)
+2. Abre la página de extensiones:
+   - Chrome: `chrome://extensions`
+   - Edge: `edge://extensions`
+   - Brave: `brave://extensions`
+   - Opera: `opera://extensions`
 3. Activa **Modo de desarrollador** (esquina superior derecha)
 4. Haz clic en **Cargar descomprimida**
-5. Selecciona la carpeta `extension` descomprimida
-6. Fija el icono en la barra de herramientas
+5. Selecciona la carpeta que contiene `manifest.json` (aunque el diálogo diga "ningún elemento coincide", pulsa **Seleccionar carpeta**)
+6. Fija el icono en la barra con el pin
 
-> **Nota:** Firefox no es compatible (usa Manifest V3 con service workers y APIs específicas de Chromium).
+> **Firefox no es compatible** (usa Manifest V3 con `activeTab` + `scripting` + inyección bajo demanda).
 
-> **Importante:** Tras actualizar los archivos de la extensión, pulsa el botón **⟳ Recargar** en `chrome://extensions` y verifica que en el pie del popup aparezca `v1.1.0`.
+## Uso rápido
 
-## Uso
+1. Abre la web donde quieres enviar los prompts (ej. generador de imágenes, chat IA, etc.)
+2. Haz clic en el icono de la extensión → se abre el popup
+3. La extensión **se inyecta sola** en la pestaña activa (permiso `activeTab`)
+4. Pulsa **Detectar** → verás recuadros azules/verdes en la página (`CAJA` y `ENVIAR`)
+5. Si la detección es correcta: pega tus prompts (uno por línea o `PROMPT 1: ...`), **Añadir**, **Iniciar**
+6. Si detecta mal: **Siguiente candidato** / **Siguiente botón**, o **Elegir yo** (un clic en la página)
+7. La cola sigue corriendo aunque cierres el popup
 
-1. Abre [Google Flow](https://labs.google/fx/tools/flow)
-2. Haz clic en el icono de la extensión
-3. **Calibra** (3 clics):
-   - Caja de texto del prompt
-   - Botón "Generar"
-   - Una imagen ya generada (resultado)
-4. Pega tus prompts (uno por línea o formato `PROMPT 1: ...`)
-5. **Añadir** → **Iniciar**
+## Si detecta mal
 
-## Funcionamiento
+- **Siguiente candidato** → ciclo entre los 5 mejores candidatos de caja/botón
+- **Elegir yo (caja/botón)** → modo manual: clic en el elemento correcto, se guarda perfil por web
+- **Olvidar esta web** → borra el perfil guardado para ese hostname
 
-- Guarda la cola en `chrome.storage.local`
-- Procesa un prompt a la vez
-- **Espera a que la imagen termine** antes del siguiente (detecta nuevas imágenes + `img.complete` + indicador de carga)
-- Reintenta automáticamente (configurable)
-- Pausa/Reanuda/Detiene
-- Persiste al recargar la pestaña
-- Pausa automática tras 3 errores seguidos
+## Si se recarga la página
 
-## Ajustes
+1. Vuelve a abrir el popup
+2. Verás: *"La página se recargó. Pulsa ▶ Iniciar para continuar"*
+3. Pulsa **Iniciar** → la cola continúa desde donde estaba (los `running` huérfanos vuelven a `pending`)
 
-- **Delay entre prompts**: 3000ms por defecto (+ aleatorio 0-1500ms)
-- **Timeout por prompt**: 180000ms (3 min)
-- **Reintentos máximos**: 2
-- **Imágenes por prompt**: 1
+## Después de actualizar archivos
 
-## Exportar/Importar
+1. En `chrome://extensions` pulsa el icono **⟳ Recargar** de "Cola de prompts"
+2. Abre el popup y comprueba que en el pie dice `v2.0.0`
 
-- **Exportar estado .json**: Guarda la cola completa con estado
-- **Importar .txt/.json**: Carga prompts o estado completo
+## Ajustes (en el popup)
 
-## Selectores
+- **Pausa entre prompts** (segundos, default 3)
+- **Timeout por prompt** (segundos, default 180)
+- **Reintentos máximos** (default 2)
+- **Resultados por prompt** 1–4 (default 1)
+- **Enviar con**: `Automático` (botón si score≥6, si no Enter) | `Botón` | `Enter` | `Ctrl+Enter`
 
-La calibración genera selectores CSS robustos priorizando:
-1. `id` estable
-2. `data-*`, `aria-label`, `role`, `placeholder`
-3. Clases cortas
-4. Ruta `tag:nth-of-type` (máx. 4 niveles)
+## Exportar / Importar
 
-Para la imagen de resultado usa un selector genérico que coincida con **todas** las imágenes generadas.
+- **Exportar estado .json** → guarda cola completa + ajustes + perfiles
+- **Importar .txt/.json** → carga prompts o estado completo
 
-Soporta **shadow DOM** (separador ` >>> `) y **iframes** (guarda `frameUrl`).
+## Diagnóstico
 
-## Escritura de prompts
+Abre **Diagnóstico** en el popup → **Copiar diagnóstico** → comparte el JSON si algo falla.
 
-Maneja tres tipos de elementos:
-- `textarea`/`input`: Setter nativo + eventos `input`/`change`
-- `contenteditable`: `execCommand('insertText')` + `InputEvent`
-- Otros: `textContent` + `InputEvent`
+## Pruebas incluidas
 
-Verifica el texto a los 400ms y reintenta una vez si falla.
+Carpeta `test/mock-pages/` con 6 páginas HTML estáticas:
+1. `a-textarea-icono.html` — textarea + botón solo-icono
+2. `b-contenteditable.html` — contenteditable + flecha SVG
+3. `c-buscador-y-prompt.html` — input search arriba + textarea abajo (debe elegir textarea)
+4. `d-shadow-dom.html` — formulario dentro de shadow root
+5. `e-muchos-botones.html` — botones Adjuntar, Micrófono, Ajustes, Enviar (type=submit)
+6. `f-generador-simulado.html` — 3 variantes funcionales (añade, reemplaza, miniatura+avatar)
 
-## Detección de fin de generación
-
-Combina:
-1. Conteo de imágenes nuevas ≥ `imagesPerPrompt` + `img.complete` + `naturalWidth > 0`
-2. Indicador de carga (`busyIndicator`) desaparecido
-3. `MutationObserver` + `setInterval` 500ms respaldo
-4. **Estabilidad**: 1.5s sin cambios en el conteo
-5. Timeout → error `TIMEOUT`
-6. Alertas/toasts de error → error `FLOW_ERROR`
-
-## Panel de diagnóstico
-
-El popup incluye:
-- **Indicador de estado** (verde/amarillo/rojo) con detección por PING y inyección bajo demanda
-- **Sección Selectores** con badges ✔/✖, botones **Probar** y **Autodetectar**
-- **Registro** (logs en vivo con colores)
-- **Diagnóstico** plegable con botón **Copiar diagnóstico** (JSON completo)
-
-## Pruebas
-
-Abre `test/mock-flow.html` en el navegador y usa la extensión contra él. Incluye tres variantes:
-1. DOM normal
-2. Shadow DOM (formulario dentro de shadow root abierto)
-3. Iframe (mismo origen)
-
-Una cola de 5 prompts debe terminar con 5 `done` en orden.
-
-### Tests unitarios (jsdom)
+### Ejecutar tests
 
 ```bash
 npm test
 ```
-
-Cubren: `buildSelector`/`buildSelectorWithShadow`, `deepQuerySelectorAll` con shadow DOM de dos niveles, máquina de estados de calibración (3 pasos, clic inválido no avanza, Cancelar/Esc, timeout 120s), handler PING, `ensureInjected`.
-
-## Si dice que no hay conexión
-
-Si el indicador muestra rojo **"No se pudo conectar con la página"**:
-
-1. **Comprueba la URL**: Debe ser `https://labs.google/fx/tools/flow...` o `https://flow.google/...`. La extensión solo funciona en esos dominios.
-2. **Recarga la extensión**: En `chrome://extensions` pulsa el icono **⟳ Recargar** de "Cola de prompts". Verifica que el pie del popup muestre `v1.1.0`.
-3. **Recarga la pestaña de Flow**: Pulsa F5 en la pestaña de Flow tras recargar la extensión.
-4. **Acceso al sitio**: En `chrome://extensions` → Detalles de "Cola de prompts" → **Acceso al sitio**, pon **"En todos los sitios"** si la opción existe.
-5. **Copia el diagnóstico**: En el popup, abre **Diagnóstico** → **Copiar diagnóstico** y compártelo para depurar.
+> Usa `jsdom` (devDependency). Si Playwright no está disponible, los tests corren con `jsdom` + `window.__rectOf` en fixtures con `data-rect`.
 
 ## Limitaciones y responsabilidad
 
-- Automatiza la interfaz web de Flow con tu cuenta
-- Google puede cambiar la página o limitar cuentas con uso automatizado
-- Incluye delays aleatorios y pausa tras 3 errores
-- **Úsala bajo tu propia responsabilidad y respeta los Términos de Servicio de Google**
+- Automatiza la web **con tu propia cuenta**
+- Las webs pueden cambiar su HTML, limitar cuentas o banear por uso automatizado
+- Incluye pausas aleatorias, reintentos y pausa tras 3 errores
+- **Úsalo bajo tu responsabilidad y respeta los Términos de Servicio de cada web**
+
+## Qué se probó / qué NO
+
+| Componente | Probado | No verificado |
+|------------|---------|---------------|
+| Detección automática (jsdom) | ✅ 6 páginas mock | Sitios reales |
+| Selector con shadow DOM | ✅ | Navegadores sin shadow DOM abierto |
+| Inyección bajo demanda | ✅ local | Permisos enterprise restrictivos |
+| Bucle de cola + reanudar | ✅ local | Recargas en navegadores gestionados |
+| Export/Import JSON | ✅ | - |
+| Manifest v2.0.0 | ✅ validación JSON | - |
+
+**No verificado en este entorno:** Chrome/Edge/Brave/Opera reales, sitios con CSP estricto, iframes cross-origin, shadow DOM cerrado.
+
+---
+
+**Versión:** 2.0.0  
+**Autor:** Elvis-Optimizer0  
+**Licencia:** Uso personal

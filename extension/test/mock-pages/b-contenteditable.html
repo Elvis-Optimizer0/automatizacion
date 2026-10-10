@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test B: contenteditable + flecha</title>
+  <style>
+    *{box-sizing:border-box} body{font-family:system-ui;padding:20px;background:#f5f5f5}
+    .container{max-width:800px;margin:0 auto;background:white;padding:24px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+    h1{margin-bottom:8px} .hint{color:#666;font-size:.9rem;margin-bottom:16px}
+    .editor{width:100%;min-height:120px;padding:12px;border:1px solid #ddd;border-radius:8px;font-family:inherit;font-size:14px;outline:none;background:#fafafa;margin-bottom:16px}
+    .btn-row{display:flex;gap:12px;align-items:center}
+    .arrow-btn{width:48px;height:48px;border-radius:8px;background:#6366F1;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center}
+    .arrow-btn svg{width:24px;height:24px;stroke:white}
+    .status{margin-top:12px;padding:8px 12px;border-radius:6px;font-size:13px}
+    .status.ready{background:#ecfdf5;color:#065f46}
+    .results{margin-top:16px;display:flex;flex-wrap:wrap;gap:12px}
+    .result-img{width:180px;height:180px;object-fit:cover;border-radius:8px;border:1px solid #eee;background:#f0f0f0}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Test B: contenteditable + flecha</h1>
+    <p class="hint">div[contenteditable] + botón con flecha svg sin etiqueta, pegado a la derecha</p>
+    <div class="editor" id="editor" contenteditable="plaintext-only" placeholder="Escribe tu prompt aquí..."></div>
+    <div class="btn-row">
+      <button class="arrow-btn" id="generate-btn" aria-label="Enviar" title="Enviar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </button>
+    </div>
+    <div class="status" id="status"></div>
+    <div class="results" id="results"></div>
+  </div>
+  <script>
+    const placeholderImages = [
+      'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgZmlsbD0iIzYzNjZGMSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiIgZm9udC1zaXplPSIyNCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPkltYWdlbiAxPC90ZXh0Pjwvc3ZnPg==',
+      'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgZmlsbD0iIzIyYzU1ZSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiIgZm9udC1zaXplPSIyNCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPkltYWdlbiAyPC90ZXh0Pjwvc3ZnPg==',
+      'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgZmlsbD0iI2Y1OWUwYiIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiIgZm9udC1zaXplPSIyNCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPkltYWdlbiAzPC90ZXh0Pjwvc3ZnPg==',
+      'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgZmlsbD0iI2VmNDQ0NCIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiIgZm9udC1zaXplPSIyNCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPkltYWdlbiA0PC90ZXh0Pjwvc3ZnPg==',
+      'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgZmlsbD0iIzhjNTRmZiIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiIgZm9udC1zaXplPSIyNCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPkltYWdlbiA1PC90ZXh0Pjwvc3ZnPg=='
+    ];
+    let imgIdx = 0;
+    const editor = document.getElementById('editor');
+    const generateBtn = document.getElementById('generate-btn');
+    const status = document.getElementById('status');
+    const results = document.getElementById('results');
+    generateBtn.addEventListener('click', async () => {
+      const prompt = editor.textContent.trim(); if (!prompt) return;
+      generateBtn.disabled = true; generateBtn.style.opacity = '0.6';
+      status.textContent = `Generando: "${prompt.slice(0,40)}..."`; status.className = 'status generating';
+      await new Promise(r => setTimeout(r, 4000));
+      const img = document.createElement('img'); img.src = placeholderImages[imgIdx % placeholderImages.length]; img.className = 'result-img'; img.alt = `Img ${imgIdx+1}`; results.appendChild(img); imgIdx++;
+      generateBtn.disabled = false; generateBtn.style.opacity = '1';
+      status.textContent = `Imagen ${imgIdx} generada ✓`; status.className = 'status ready';
+    });
+  </script>
+</body>
+</html>

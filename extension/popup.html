@@ -16,43 +16,29 @@
       </div>
     </header>
 
-    <section class="section" id="selectors-section">
+    <section class="section" id="detection-section">
       <div class="section-header">
-        <h2>Selectores</h2>
+        <h2>Detección</h2>
       </div>
-      <div class="selector-row" data-key="input">
-        <div class="selector-info">
-          <span class="selector-label">Caja de texto</span>
-          <span class="selector-badge" id="badge-input">✖</span>
-        </div>
-        <div class="selector-actions">
-          <button class="btn btn-sm btn-secondary" data-action="test" data-key="input">Probar</button>
-        </div>
-        <div class="selector-meta" id="meta-input"></div>
+      <div class="detection-controls">
+        <button class="btn btn-primary" id="detect-btn">Detectar</button>
+        <button class="btn btn-secondary" id="next-input-btn" hidden>Siguiente caja</button>
+        <button class="btn btn-secondary" id="next-submit-btn" hidden>Siguiente botón</button>
+        <button class="btn btn-secondary" id="test-input-btn" hidden>Probar caja</button>
+        <button class="btn btn-secondary" id="test-submit-btn" hidden>Probar botón</button>
+        <button class="btn btn-secondary" id="pick-input-btn" hidden>Elegir yo (caja)</button>
+        <button class="btn btn-secondary" id="pick-submit-btn" hidden>Elegir yo (botón)</button>
+        <button class="btn btn-secondary" id="forget-btn" hidden>Olvidar esta web</button>
       </div>
-      <div class="selector-row" data-key="submit">
-        <div class="selector-info">
-          <span class="selector-label">Botón generar</span>
-          <span class="selector-badge" id="badge-submit">✖</span>
+      <div class="detection-result" id="detection-result" hidden>
+        <div class="detected-item">
+          <span class="detected-label">Caja:</span>
+          <span class="detected-value" id="detected-input">—</span>
         </div>
-        <div class="selector-actions">
-          <button class="btn btn-sm btn-secondary" data-action="test" data-key="submit">Probar</button>
+        <div class="detected-item">
+          <span class="detected-label">Botón:</span>
+          <span class="detected-value" id="detected-submit">—</span>
         </div>
-        <div class="selector-meta" id="meta-submit"></div>
-      </div>
-      <div class="selector-row" data-key="resultImage">
-        <div class="selector-info">
-          <span class="selector-label">Imagen resultado</span>
-          <span class="selector-badge" id="badge-resultImage">✖</span>
-        </div>
-        <div class="selector-actions">
-          <button class="btn btn-sm btn-secondary" data-action="test" data-key="resultImage">Probar</button>
-        </div>
-        <div class="selector-meta" id="meta-resultImage"></div>
-      </div>
-      <div class="selector-buttons">
-        <button class="btn btn-primary" id="calibrate-btn">Calibrar</button>
-        <button class="btn btn-secondary" id="autodetect-btn">Autodetectar</button>
       </div>
     </section>
 
@@ -95,6 +81,26 @@
       </div>
     </section>
 
+    <section class="section settings-section">
+      <details class="collapsible">
+        <summary>Ajustes</summary>
+        <div class="settings-grid">
+          <label>Pausa entre prompts (s)<input type="number" id="setting-delay" min="1" max="300" step="0.5" value="3"></label>
+          <label>Timeout (s)<input type="number" id="setting-timeout" min="10" max="1800" step="5" value="180"></label>
+          <label>Reintentos<input type="number" id="setting-retries" min="0" max="10" value="2"></label>
+          <label>Resultados por prompt<input type="number" id="setting-images" min="1" max="4" value="1"></label>
+          <label class="full-width">Enviar con
+            <select id="setting-submit-method">
+              <option value="auto">Automático</option>
+              <option value="button">Botón</option>
+              <option value="enter">Enter</option>
+              <option value="ctrl-enter">Ctrl+Enter</option>
+            </select>
+          </label>
+        </div>
+      </details>
+    </section>
+
     <section class="section">
       <details class="collapsible" open>
         <summary>Registro</summary>
@@ -110,23 +116,10 @@
       </details>
     </section>
 
-    <section class="section settings-section">
-      <details class="collapsible">
-        <summary>Ajustes</summary>
-        <div class="settings-grid">
-          <label>Delay entre prompts (ms)<input type="number" id="setting-delay" min="1000" max="60000" step="500" value="3000"></label>
-          <label>Timeout por prompt (ms)<input type="number" id="setting-timeout" min="30000" max="600000" step="5000" value="180000"></label>
-          <label>Reintentos máximos<input type="number" id="setting-retries" min="0" max="10" value="2"></label>
-          <label>Imágenes por prompt<input type="number" id="setting-images" min="1" max="4" value="1"></label>
-        </div>
-      </details>
-    </section>
-
     <footer class="popup-footer">
-      <span id="extension-version">v1.1.0</span>
+      <span id="extension-version">v2.0.0</span>
     </footer>
   </div>
-
   <script src="popup.js"></script>
 </body>
 </html>

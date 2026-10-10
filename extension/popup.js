@@ -1,498 +1,238 @@
 const $ = (id) => document.getElementById(id);
 
-let currentState = null;
 let currentTab = null;
-let injectionAttempts = 0;
-let diagnosticLogs = [];
+let currentFrameId = null;
+let currentDetection = null;
+let currentProfile = null;
 
-function formatTime(ms) {
-  if (!ms || ms < 0) return 'calculando...';
-  const secs = Math.floor(ms / 1000);
-  const mins = Math.floor(secs / 60);
-  const hours = Math.floor(mins / 60);
-  if (hours > 0) return `${hours}h ${mins % 60}m`;
-  if (mins > 0) return `${mins}m ${secs % 60}s`;
-  return `${secs}s`;
-}
+function formatTime(ms) { if (!ms || ms < 0) return 'calculando...'; const s = Math.floor(ms/1000), m = Math.floor(s/60), h = Math.floor(m/60); return h>0?`${h}h ${m%60}m`:m>0?`${m}m ${s%60}s`:`${s}s`; }
 
-function addLog(entry) {
-  diagnosticLogs.push(entry);
-  if (diagnosticLogs.length > 100) diagnosticLogs.shift();
-  renderLogs();
-  renderDiagnostic();
-}
+function sendToContent(type, data={}) { if (!currentTab?.id) return Promise.resolve({error:'No tab'}); return new Promise(resolve => chrome.scripting.executeScript({target:{tabId:currentTab.id, allFrames:true, frameIds:currentFrameId?[currentFrameId]:undefined}, func: (t,d) => window.__colaPromptsContent?.[t]?.(d), args: [type, data]}).then(r => resolve(r?.[0]?.result)).catch(() => resolve({error:'No content script'}))); }
 
-function logInfo(msg) { addLog({ type: 'info', time: Date.now(), msg }); }
-function logSuccess(msg) { addLog({ type: 'success', time: Date.now(), msg }); }
-function logWarning(msg) { addLog({ type: 'warning', time: Date.now(), msg }); }
-function logError(msg) { addLog({ type: 'error', time: Date.now(), msg }); }
-
-function sendMessage(type, data = {}) {
-  return new Promise(resolve => {
-    chrome.runtime.sendMessage({ type, ...data }, resolve);
-  });
-}
-
-function sendToContentScript(type, data = {}) {
-  if (!currentTab?.id) return Promise.resolve({ error: 'No tab' });
-  return new Promise(resolve => {
-    chrome.tabs.sendMessage(currentTab.id, { type, ...data }, resolve);
-  });
-}
+function sendToPopup(type, data={}) { return new Promise(resolve => chrome.runtime.sendMessage({type, ...data}, resolve)); }
 
 async function ensureInjected() {
-  if (!currentTab?.id) return { success: false, error: 'No active tab' };
-
-  const blockedProtocols = ['chrome:', 'edge:', 'brave:', 'opera:', 'about:', 'chrome-extension:'];
-  if (blockedProtocols.some(p => currentTab.url?.startsWith(p))) {
-    return { success: false, error: 'Abre la pestaña de Flow y vuelve a abrir esta ventana' };
-  }
-
-  for (let attempt = 0; attempt < 3; attempt++) {
-    injectionAttempts = attempt + 1;
-    const response = await sendToContentScript('PING');
-    if (response?.ok) {
-      return { success: true, response };
-    }
-    if (attempt < 2) {
-      logInfo(`PING falló (intento ${attempt + 1}), inyectando content script...`);
-      try {
-        await chrome.scripting.executeScript({
-          target: { tabId: currentTab.id, allFrames: true },
-          files: ['selectors.js', 'content.js']
-        });
-        await new Promise(r => setTimeout(r, 300));
-      } catch (e) {
-        logError(`Error inyectando: ${e.message}`);
-      }
-    }
-  }
-  return { success: false, error: 'No se pudo conectar con la página tras 3 intentos' };
-}
-
-function updateStatusIndicator(response) {
-  const indicator = $('#status-indicator');
-  const dot = indicator.querySelector('.status-dot');
-  const text = indicator.querySelector('.status-text');
-
-  indicator.classList.remove('connected', 'warning', 'error', 'connecting');
-
-  if (!response) {
-    indicator.classList.add('error');
-    text.textContent = 'Sin conexión';
-    return;
-  }
-
-  if (response.looksLikeFlow) {
-    indicator.classList.add('connected');
-    text.textContent = 'Conectado a Flow';
-  } else {
-    indicator.classList.add('warning');
-    text.textContent = 'Conectado, pero esta página no parece Flow (puedes calibrar igual)';
+  if (!currentTab?.id) return {success:false, error:'No active tab'};
+  const blocked = ['chrome:', 'edge:', 'brave:', 'opera:', 'about:', 'chrome-extension:'];
+  if (blocked.some(p => currentTab.url?.startsWith(p))) return {success:false, error:'El navegador no permite extensiones en esta página. Abre la web donde vas a usar los prompts.'};
+  try {
+    await chrome.scripting.executeScript({target:{tabId:currentTab.id, allFrames:true}, files:['detect.js','content.js']});
+    await new Promise(r => setTimeout(r, 300));
+    const ping = await sendToContent('PING');
+    if (!ping?.ok) throw new Error('No response');
+    return {success:true};
+  } catch (e) {
+    if (e.message.includes('Cannot access contents')) return {success:false, error:'El navegador bloqueó el acceso a esta página. Recárgala (F5) y vuelve a abrir esta ventana.'};
+    return {success:false, error:e.message};
   }
 }
 
-function updateSelectorsUI(selectors, selectorMeta) {
-  const keys = ['input', 'submit', 'resultImage'];
-  const labels = { input: 'Caja de texto', submit: 'Botón generar', resultImage: 'Imagen resultado' };
-
-  keys.forEach(key => {
-    const badge = $(`badge-${key}`);
-    const meta = $(`meta-${key}`);
-    const row = document.querySelector(`.selector-row[data-key="${key}"]`);
-
-    if (selectors[key]) {
-      badge.textContent = '✔';
-      badge.classList.add('ok');
-      row.classList.add('has-selector');
-    } else {
-      badge.textContent = '✖';
-      badge.classList.remove('ok');
-      row.classList.remove('has-selector');
-    }
-
-    if (selectorMeta[key]) {
-      const m = selectorMeta[key];
-      meta.textContent = `${m.tag || ''} ${m.ariaLabel ? `aria-label="${m.ariaLabel}"` : ''} ${m.placeholder ? `placeholder="${m.placeholder}"` : ''} ${m.text ? `text="${m.text}"` : ''} ${m.kind ? `kind="${m.kind}"` : ''} @ ${m.frameUrl || 'top'}`.trim();
-    } else {
-      meta.textContent = 'Sin selector guardado';
-    }
-  });
+function updateStatus(state) {
+  const ind = $('#status-indicator'), dot = ind.querySelector('.status-dot'), txt = ind.querySelector('.status-text');
+  ind.classList.remove('ready','error','connecting');
+  if (!state) { ind.classList.add('error'); txt.textContent = 'Sin conexión'; return; }
+  if (state.success) { ind.classList.add('ready'); txt.textContent = 'Lista en esta página'; }
+  else { ind.classList.add('error'); txt.textContent = `No se pudo preparar la página: ${state.error}`; }
 }
 
 function renderQueue(queue) {
+  const done = queue.filter(q=>q.status==='done').length, total = queue.length;
+  $('#done-count').textContent = done; $('#total-count').textContent = total;
   const list = $('#queue-list');
-  const done = queue.filter(q => q.status === 'done').length;
-  const total = queue.length;
-
-  $('#done-count').textContent = done;
-  $('#total-count').textContent = total;
-
-  if (queue.length === 0) {
-    list.innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:20px;">Cola vacía</div>';
-    return;
-  }
-
+  if (!total) { list.innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:20px;">Cola vacía</div>'; return; }
   list.innerHTML = queue.map(item => {
-    const icons = { pending: '⏳', running: '⚙️', done: '✅', error: '❌' };
-    const statusClass = item.status;
-    const errorAttr = item.error ? ` data-error="${item.error.replace(/"/g, '"')}"` : '';
-    return `
-      <div class="queue-item">
-        <span class="status-icon ${statusClass}">${icons[statusClass] || '⏳'}</span>
-        <span class="prompt-text" title="${item.text}">${item.text}</span>
-        ${item.status === 'error' ? `<span class="error-tooltip"${errorAttr}>⚠</span>` : ''}
-      </div>
-    `;
+    const icons = {pending:'⏳',running:'⚙️',done:'✅',error:'❌'};
+    const err = item.error ? ` data-error="${item.error.replace(/"/g,'"')}"` : '';
+    return `<div class="queue-item"><span class="status-icon ${item.status}">${icons[item.status]||'⏳'}</span><span class="prompt-text" title="${item.text}">${item.text.slice(0,60)}</span>${item.status==='error'?`<span class="error-tooltip"${err}>⚠</span>`:''}</div>`;
   }).join('');
 }
 
 function updateProgress(state) {
-  const queue = state.queue;
-  const done = queue.filter(q => q.status === 'done').length;
-  const running = queue.find(q => q.status === 'running');
-  const pending = queue.filter(q => q.status === 'pending').length;
-  const total = queue.length;
-
-  const progressInfo = $('#progress-info');
-  const progressFill = $('#progress-fill');
-  const progressText = $('#progress-text');
-
-  if (total === 0) {
-    progressInfo.hidden = true;
-    return;
-  }
-
-  progressInfo.hidden = false;
-  const percent = total > 0 ? (done / total) * 100 : 0;
-  progressFill.style.width = `${percent}%`;
-
-  if (state.running && !state.paused && running) {
-    const avgTime = calculateAvgTime(queue);
-    const remaining = pending * avgTime;
-    progressText.textContent = `Tiempo restante estimado: ${formatTime(remaining)}`;
-  } else if (state.paused) {
-    progressText.textContent = 'Pausado';
-  } else if (done === total && total > 0) {
-    progressText.textContent = '¡Completado!';
-  } else {
-    progressText.textContent = 'Listo para iniciar';
-  }
+  const q = state.queue, done = q.filter(x=>x.status==='done').length, run = q.find(x=>x.status==='running'), pend = q.filter(x=>x.status==='pending').length, tot = q.length;
+  const pi = $('#progress-info'), pf = $('#progress-fill'), pt = $('#progress-text');
+  if (!tot) { pi.hidden = true; return; }
+  pi.hidden = false; pf.style.width = `${tot?(done/tot)*100:0}%`;
+  if (state.running && !state.paused && run) { const avg = q.filter(x=>x.status==='done'&&x.startedAt&&x.finishedAt).reduce((a,b)=>a+(b.finishedAt-b.startedAt),0)/Math.max(1,q.filter(x=>x.status==='done'&&x.startedAt&&x.finishedAt).length); pt.textContent = `Tiempo restante: ${formatTime(pend*avg)}`; }
+  else if (state.paused) pt.textContent = 'Pausado';
+  else if (done===tot && tot>0) pt.textContent = '¡Completado!';
+  else pt.textContent = 'Listo para iniciar';
 }
 
-function calculateAvgTime(queue) {
-  const completed = queue.filter(q => q.status === 'done' && q.startedAt && q.finishedAt);
-  if (completed.length === 0) return 30000;
-  const total = completed.reduce((sum, q) => sum + (q.finishedAt - q.startedAt), 0);
-  return total / completed.length;
-}
+function renderLogs() { chrome.storage.local.get('colaPromptsLogs', d => { const logs = d.colaPromptsLogs || []; $('#log-container').innerHTML = logs.map(e => { const t=e.substring(0,8), m=e.substring(9); let c='info'; if(m.startsWith('ERROR'))c='error';else if(m.includes('completad')||m.includes('guardado'))c='success';else if(m.includes('advert')||m.includes('warning'))c='warning'; return `<div class="log-entry ${c}"><span style="color:var(--text-dim)">${t}</span> ${m}</div>`; }).join(''); }); }
 
-function renderLogs() {
-  const container = $('#log-container');
-  chrome.storage.local.get('colaPromptsLogs', (data) => {
-    const logs = data.colaPromptsLogs || [];
-    container.innerHTML = logs.map(entry => {
-      const time = entry.substring(0, 8);
-      const msg = entry.substring(9);
-      let cls = 'info';
-      if (msg.startsWith('ERROR')) cls = 'error';
-      else if (msg.includes('completado') || msg.includes('guardado')) cls = 'success';
-      else if (msg.includes('advertencia') || msg.includes('warning')) cls = 'warning';
-      return `<div class="log-entry ${cls}"><span style="color:var(--text-dim)">${time}</span> ${msg}</div>`;
-    }).join('');
-    container.scrollTop = container.scrollHeight;
-  });
-}
-
-function renderDiagnostic() {
-  const container = $('#diagnostic-content');
-  if (!currentState || !currentTab) {
-    container.textContent = 'Aún no hay datos de diagnóstico';
-    return;
-  }
-
-  const { selectors = {}, selectorMeta = {} } = currentState;
-  const lines = [
+async function renderDiagnostic() {
+  const {siteProfiles={}} = await new Promise(r=>chrome.storage.local.get('siteProfiles',r));
+  const profile = siteProfiles[currentTab?.url?new URL(currentTab.url).hostname:''];
+  const logs = await new Promise(r=>chrome.storage.local.get('colaPromptsLogs',d=>r(d.colaPromptsLogs||[])));
+  const txt = [
     `Versión: ${chrome.runtime.getManifest().version}`,
-    `URL: ${currentTab.url}`,
-    `Hostname: ${currentTab.url ? new URL(currentTab.url).hostname : 'N/A'}`,
-    `Intentos de inyección: ${injectionAttempts}`,
-    '',
-    'Selectores guardados:',
-    `  input: ${selectors.input ? '✔' : '✖'} ${selectorMeta.input ? selectorMeta.input.selector : ''}`,
-    `  submit: ${selectors.submit ? '✔' : '✖'} ${selectorMeta.submit ? selectorMeta.submit.selector : ''}`,
-    `  resultImage: ${selectors.resultImage ? '✔' : '✖'} ${selectorMeta.resultImage ? selectorMeta.resultImage.selector : ''}`,
-    '',
-    'Últimos logs:',
-    ...diagnosticLogs.slice(-20).map(l => `  [${new Date(l.time).toLocaleTimeString()}] ${l.msg}`)
-  ];
-  container.textContent = lines.join('\n');
-}
-
-function updateUI(state) {
-  currentState = state;
-
-  updateSelectorsUI(state.selectors || {}, state.selectorMeta || {});
-  renderQueue(state.queue || []);
-  updateProgress(state);
-  renderLogs();
-  renderDiagnostic();
-
-  const hasSelectors = state.selectors?.input && state.selectors?.submit && state.selectors?.resultImage;
-  $('#start-btn').disabled = !hasSelectors || state.running || (state.queue?.length || 0) === 0;
-  $('#pause-btn').disabled = !state.running || state.paused;
-  $('#stop-btn').disabled = !state.running;
-
-  $('#setting-delay').value = state.settings?.delayBetweenMs || 3000;
-  $('#setting-timeout').value = state.settings?.timeoutPerPromptMs || 180000;
-  $('#setting-retries').value = state.settings?.maxRetries || 2;
-  $('#setting-images').value = state.settings?.imagesPerPrompt || 1;
-
-  $('#extension-version').textContent = `v${chrome.runtime.getManifest().version}`;
+    `URL: ${currentTab?.url}`, `Hostname: ${currentTab?.url?new URL(currentTab.url).hostname:'N/A'}`,
+    `Detección: ${currentDetection?currentDetection.success?'ok':currentDetection.error:'pendiente'}`,
+    `Perfil guardado: ${profile?'sí':'no'}`,
+    `Últimos logs:`, ...logs.slice(-10).map(l=>`  ${l}`)
+  ].join('\n');
+  $('#diagnostic-content').textContent = txt;
 }
 
 async function loadState() {
-  const response = await sendMessage('GET_STATE');
-  if (response?.state) updateUI(response.state);
+  const state = await sendToPopup('GET_STATE');
+  if (state?.state) {
+    renderQueue(state.queue);
+    updateProgress(state);
+    $('#start-btn').disabled = !state.running && (state.queue?.length||0)===0;
+    $('#pause-btn').disabled = !state.running || state.paused;
+    $('#stop-btn').disabled = !state.running;
+    $('#setting-delay').value = state.settings?.delayBetweenMs/1000 || 3;
+    $('#setting-timeout').value = state.settings?.timeoutPerPromptMs/1000 || 180;
+    $('#setting-retries').value = state.settings?.maxRetries || 2;
+    $('#setting-images').value = state.settings?.imagesPerPrompt || 1;
+    $('#setting-submit-method').value = state.settings?.submitMethod || 'auto';
+    renderDiagnostic();
+  }
 }
 
-function showNotification(msg, type = 'info') {
-  const notif = document.createElement('div');
-  notif.className = `notification ${type}`;
-  notif.textContent = msg;
-  document.body.appendChild(notif);
-  setTimeout(() => {
-    notif.style.animation = 'slideUp 0.3s ease';
-    setTimeout(() => notif.remove(), 300);
-  }, 3000);
-}
+function notify(msg, type='info') { const n=document.createElement('div'); n.className=`notification ${type}`; n.textContent=msg; document.body.appendChild(n); setTimeout(()=>{n.style.animation='slideUp 0.3s ease';setTimeout(()=>n.remove(),300);},3000); }
 
-function setupEventListeners() {
-  $('#add-prompts').addEventListener('click', async () => {
+function setup() {
+  $('#detect-btn').onclick = async () => {
+    const res = await ensureInjected();
+    updateStatus(res);
+    if (!res.success) { notify(res.error,'error'); return; }
+    currentDetection = await sendToContent('ENSURE_DETECTED', {frameId: currentFrameId});
+    if (!currentDetection.success) { notify(currentDetection.error,'error'); updateStatus(currentDetection); return; }
+    const inp = currentDetection.input;
+    const sub = currentDetection.submit;
+    $('#detection-result').hidden = false;
+    $('#detected-input').textContent = inp ? `${inp.type} · "${inp.label.slice(0,40)}" (puntuación ${inp.score.toFixed(1)})` : 'No detectada';
+    $('#detected-submit').textContent = sub ? `${sub.type} · "${sub.label.slice(0,40)}" (puntuación ${sub.score.toFixed(1)})` : 'Sin botón: se enviará con Enter';
+    $('#next-input-btn').hidden = false;
+    $('#next-submit-btn').hidden = false;
+    $('#test-input-btn').hidden = false;
+    $('#test-submit-btn').hidden = false;
+    $('#pick-input-btn').hidden = false;
+    $('#pick-submit-btn').hidden = false;
+    $('#forget-btn').hidden = false;
+    notify('Detección completada','success');
+  };
+
+  $('#next-input-btn').onclick = async () => {
+    if (!currentDetection?.input) return;
+    const inputs = currentDetection.alternatives || [];
+    if (!inputs.length) return notify('No hay más candidatos','info');
+    currentDetection.input = inputs.shift();
+    $('#detected-input').textContent = `${currentDetection.input.type} · "${currentDetection.input.label.slice(0,40)}" (puntuación ${currentDetection.input.score.toFixed(1)})`;
+  };
+
+  $('#next-submit-btn').onclick = async () => {
+    if (!currentDetection?.submit) return;
+    const alts = currentDetection.alternatives || [];
+    if (!alts.length) return notify('No hay más candidatos','info');
+    currentDetection.submit = alts.shift();
+    $('#detected-submit').textContent = `${currentDetection.submit.type} · "${currentDetection.submit.label.slice(0,40)}" (puntuación ${currentDetection.submit.score.toFixed(1)})`;
+  };
+
+  $('#test-input-btn').onclick = async () => {
+    if (!currentDetection?.input?.selector) return notify('No hay selector','error');
+    await sendToContent('TEST_ELEMENT', {selector: currentDetection.input.selector, elementType: 'input'});
+    notify('Probando caja...','info');
+  };
+
+  $('#test-submit-btn').onclick = async () => {
+    if (!currentDetection?.submit?.selector) return notify('No hay selector','error');
+    await sendToContent('TEST_ELEMENT', {selector: currentDetection.submit.selector, elementType: 'submit'});
+    notify('Probando botón...','info');
+  };
+
+  $('#pick-input-btn').onclick = async () => {
+    await sendToContent('PICK_INPUT');
+    window.close();
+  };
+
+  $('#pick-submit-btn').onclick = async () => {
+    await sendToContent('PICK_SUBMIT');
+    window.close();
+  };
+
+  $('#forget-btn').onclick = async () => {
+    const host = currentTab?.url?new URL(currentTab.url).hostname:'';
+    if (host && confirm(`Olvidar perfil para ${host}?`)) {
+      await sendToPopup('CLEAR_PROFILE', {hostname: host});
+      notify('Perfil olvidado','success');
+    }
+  };
+
+  $('#add-prompts').onclick = async () => {
     const text = $('#prompts-textarea').value.trim();
     if (!text) return;
-    const prompts = text.split('\n')
-      .map(l => l.replace(/^\s*PROMPT\s*\d+\s*[:.\-]\s*/i, '').trim())
-      .filter(l => l.length > 0);
-    const uniquePrompts = [...new Set(prompts)];
-    const response = await sendMessage('ADD_PROMPTS', { prompts: uniquePrompts });
-    if (response?.success) {
-      $('#prompts-textarea').value = '';
-      logSuccess(`Añadidos ${uniquePrompts.length} prompts`);
-      loadState();
-    }
-  });
-
-  $('#import-prompts').addEventListener('click', () => $('#import-file').click());
-
-  $('#import-file').addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const text = await file.text();
-    try {
-      const data = JSON.parse(text);
-      if (data.queue) {
-        await sendMessage('IMPORT_STATE', { json: text });
-      } else {
-        const prompts = text.split('\n').map(l => l.trim()).filter(l => l);
-        await sendMessage('ADD_PROMPTS', { prompts });
-      }
-      logSuccess('Importado correctamente');
-      loadState();
-    } catch {
-      const prompts = text.split('\n').map(l => l.trim()).filter(l => l);
-      await sendMessage('ADD_PROMPTS', { prompts });
-      logSuccess('Importado como prompts');
-      loadState();
-    }
-    e.target.value = '';
-  });
-
-  $('#export-state').addEventListener('click', async () => {
-    const response = await sendMessage('EXPORT_STATE');
-    if (response?.state) {
-      const blob = new Blob([response.state], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `cola-prompts-${Date.now()}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      logSuccess('Estado exportado');
-    }
-  });
-
-  $('#calibrate-btn').addEventListener('click', async () => {
-    const result = await ensureInjected();
-    if (!result.success) {
-      logError(result.error);
-      showNotification(result.error, 'error');
-      return;
-    }
-    await sendToContentScript('CALIBRATE_START');
-    logInfo('Calibración iniciada');
-    window.close();
-  });
-
-  $('#autodetect-btn').addEventListener('click', async () => {
-    const result = await ensureInjected();
-    if (!result.success) {
-      showNotification(result.error, 'error');
-      return;
-    }
-    const response = await sendToContentScript('AUTODETECT');
-    if (response?.success) {
-      logInfo('Autodetectar ejecutado');
-      if (response.results.input) {
-        await sendMessage('SAVE_SELECTORS', { selectors: { input: response.results.input.selector } });
-      }
-      if (response.results.submit) {
-        await sendMessage('SAVE_SELECTORS', { selectors: { submit: response.results.submit.selector } });
-      }
-      if (response.results.resultImage) {
-        await sendMessage('SAVE_SELECTORS', { selectors: { resultImage: response.results.resultImage.selector } });
-      }
-      loadState();
-    }
-  });
-
-  document.querySelectorAll('[data-action="test"]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const key = btn.dataset.key;
-      const selector = currentState?.selectors?.[key];
-      if (!selector) {
-        showNotification('No hay selector guardado para probar', 'error');
-        return;
-      }
-      const result = await ensureInjected();
-      if (!result.success) {
-        showNotification(result.error, 'error');
-        return;
-      }
-      await sendToContentScript('TEST_SELECTOR', { selector, type: key });
-      logInfo(`Probando selector: ${key}`);
-      showNotification(`Probando ${key}...`, 'info');
-    });
-  });
-
-  $('#start-btn').addEventListener('click', async () => {
-    const result = await ensureInjected();
-    if (!result.success) {
-      showNotification(result.error, 'error');
-      return;
-    }
-    if (!currentState?.selectors?.input || !currentState?.selectors?.submit || !currentState?.selectors?.resultImage) {
-      showNotification('Primero calibra (o usa Autodetectar)', 'error');
-      return;
-    }
-    await sendMessage('START_QUEUE');
-    logInfo('Cola iniciada');
+    const prompts = text.split('\n').map(l=>l.replace(/^\s*PROMPT\s*\d+\s*[:.\-]\s*/i,'').trim()).filter(l=>l);
+    const uniq = [...new Set(prompts)];
+    await sendToPopup('ADD_PROMPTS', {prompts: uniq});
+    $('#prompts-textarea').value = '';
     loadState();
-  });
+  };
 
-  $('#pause-btn').addEventListener('click', async () => {
-    await sendMessage('PAUSE_QUEUE');
-    logInfo('Cola pausada');
+  $('#import-prompts').onclick = () => $('#import-file').click();
+  $('#import-file').onchange = async e => {
+    const f = e.target.files[0]; if (!f) return;
+    const txt = await f.text();
+    try { const d=JSON.parse(txt); if(d.queue) await sendToPopup('IMPORT_STATE',{json:txt}); else {const p=txt.split('\n').map(l=>l.trim()).filter(l=>l); await sendToPopup('ADD_PROMPTS',{prompts:p});} } catch { const p=txt.split('\n').map(l=>l.trim()).filter(l=>l); await sendToPopup('ADD_PROMPTS',{prompts:p}); }
+    e.target.value=''; loadState();
+  };
+
+  $('#export-state').onclick = async () => {
+    const r = await sendToPopup('EXPORT_STATE');
+    if (r?.state) { const blob=new Blob([r.state],{type:'application/json'}); const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download=`cola-prompts-${Date.now()}.json`; a.click(); URL.revokeObjectURL(u); notify('Exportado','success'); }
+  };
+
+  $('#start-btn').onclick = async () => {
+    const res = await ensureInjected();
+    if (!res.success) { notify(res.error,'error'); updateStatus(res); return; }
+    const det = await sendToContent('ENSURE_DETECTED', {frameId: currentFrameId});
+    if (!det.success || !det.input) { notify('No encuentro una caja de texto en esta página','error'); return; }
+    await sendToPopup('START_QUEUE');
+    notify('Cola iniciada','success');
     loadState();
-  });
+  };
 
-  $('#stop-btn').addEventListener('click', async () => {
-    await sendMessage('STOP_QUEUE');
-    logInfo('Cola detenida');
-    loadState();
-  });
+  $('#pause-btn').onclick = async () => { await sendToPopup('PAUSE_QUEUE'); loadState(); };
+  $('#stop-btn').onclick = async () => { await sendToPopup('STOP_QUEUE'); loadState(); };
+  $('#clear-btn').onclick = async () => { if(confirm('Limpiar toda la cola?')) { await sendToPopup('CLEAR_QUEUE'); loadState(); } };
+  $('#retry-btn').onclick = async () => { await sendToPopup('RETRY_ERRORS'); loadState(); };
 
-  $('#clear-btn').addEventListener('click', async () => {
-    if (!confirm('¿Limpiar toda la cola?')) return;
-    await sendMessage('CLEAR_QUEUE');
-    logInfo('Cola limpiada');
-    loadState();
-  });
-
-  $('#retry-btn').addEventListener('click', async () => {
-    await sendMessage('RETRY_ERRORS');
-    logInfo('Reintentando errores');
-    loadState();
-  });
-
-  ['setting-delay', 'setting-timeout', 'setting-retries', 'setting-images'].forEach(id => {
-    $(id).addEventListener('change', async () => {
-      const settings = {
-        delayBetweenMs: parseInt($('#setting-delay').value, 10),
-        timeoutPerPromptMs: parseInt($('#setting-timeout').value, 10),
-        maxRetries: parseInt($('#setting-retries').value, 10),
-        imagesPerPrompt: parseInt($('#setting-images').value, 10)
-      };
-      await sendMessage('UPDATE_SETTINGS', { settings });
-    });
-  });
-
-  $('#copy-diagnostic').addEventListener('click', async () => {
-    const fullDiagnostic = {
-      version: chrome.runtime.getManifest().version,
-      timestamp: new Date().toISOString(),
-      tab: currentTab ? { url: currentTab.url, title: currentTab.title } : null,
-      injectionAttempts,
-      state: currentState,
-      logs: diagnosticLogs
+  ['setting-delay','setting-timeout','setting-retries','setting-images','setting-submit-method'].forEach(id => {
+    $(id).onchange = async () => {
+      await sendToPopup('UPDATE_SETTINGS', {settings: {
+        delayBetweenMs: parseFloat($('#setting-delay').value)*1000,
+        timeoutPerPromptMs: parseFloat($('#setting-timeout').value)*1000,
+        maxRetries: parseInt($('#setting-retries').value),
+        imagesPerPrompt: parseInt($('#setting-images').value),
+        submitMethod: $('#setting-submit-method').value
+      }});
     };
-    const json = JSON.stringify(fullDiagnostic, null, 2);
-    await navigator.clipboard.writeText(json);
-    showNotification('Diagnóstico copiado al portapapeles', 'success');
   });
+
+  $('#copy-diagnostic').onclick = async () => {
+    const diag = { version: chrome.runtime.getManifest().version, timestamp: new Date().toISOString(), tab: currentTab?{url:currentTab.url,title:currentTab.title}:null, detection: currentDetection, profile: currentProfile, logs: await new Promise(r=>chrome.storage.local.get('colaPromptsLogs',d=>r(d.colaPromptsLogs||[]))) };
+    await navigator.clipboard.writeText(JSON.stringify(diag,null,2));
+    notify('Diagnóstico copiado','success');
+  };
 }
 
-chrome.runtime.onMessage.addListener((message) => {
-  if (message.type === 'STATE_UPDATE') {
-    updateUI(message.state);
-  } else if (message.type === 'QUEUE_COMPLETE') {
-    loadState();
-    showNotification('Cola completada', 'success');
-  }
-});
-
 async function init() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  currentTab = tab;
-
-  if (!tab?.url || ['chrome:', 'edge:', 'brave:', 'opera:', 'about:', 'chrome-extension:'].some(p => tab.url.startsWith(p))) {
-    $('#status-indicator').classList.add('error');
-    $('#status-indicator .status-text').textContent = 'Abre la pestaña de Flow y vuelve a abrir esta ventana';
-    $('#calibrate-btn').disabled = true;
-    $('#autodetect-btn').disabled = true;
+  const tabs = await chrome.tabs.query({active:true, currentWindow:true});
+  currentTab = tabs[0];
+  const res = await ensureInjected();
+  updateStatus(res);
+  if (!res.success) {
+    $('#detect-btn').disabled = true;
     $('#start-btn').disabled = true;
-    logWarning('Pestaña no válida para Flow');
-  } else {
-    logInfo(`Conectando a ${tab.url}...`);
-    const result = await ensureInjected();
-    if (result.success && result.response) {
-      updateStatusIndicator(result.response);
-      logSuccess('Conectado al content script');
-    } else {
-      $('#status-indicator').classList.add('error');
-      $('#status-indicator .status-text').textContent = `No se pudo conectar: ${result.error}`;
-      logError(result.error);
-    }
+    $('#pause-btn').disabled = true;
+    $('#stop-btn').disabled = true;
   }
-
   loadState();
-  setupEventListeners();
-
+  setup();
   setInterval(loadState, 2000);
   setInterval(renderLogs, 3000);
 }
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init);
-} else {
-  init();
-}
-
-const style = document.createElement('style');
-style.textContent = `
-  @keyframes slideUp {
-    from { opacity: 1; transform: translateX(-50%) translateY(0); }
-    to { opacity: 0; transform: translateX(-50%) translateY(-10px); }
-  }
-`;
-document.head.appendChild(style);
+if (document.readyState==='loading') document.addEventListener('DOMContentLoaded',init); else init();

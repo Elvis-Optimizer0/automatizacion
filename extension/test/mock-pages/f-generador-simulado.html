@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test F: Generador simulado (3 variantes)</title>
+  <style>
+    *{box-sizing:border-box} body{font-family:system-ui;padding:20px;background:#f5f5f5}
+    .container{max-width:900px;margin:0 auto;background:white;padding:24px;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.1)}
+    h1{margin-bottom:8px} .hint{color:#666;font-size:.9rem;margin-bottom:16px}
+    .variant{border:1px dashed #ccc;border-radius:8px;padding:16px;margin-bottom:24px;background:#fafafa}
+    .variant-title{font-weight:600;margin-bottom:12px;color:#666}
+    .prompt-area{width:100%;min-height:100px;padding:12px;border:1px solid #ddd;border-radius:8px;font-family:inherit;font-size:14px;resize:vertical;margin-bottom:16px}
+    .generate-btn{padding:12px 24px;background:#6366F1;color:white;border:none;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer}
+    .generate-btn:hover:not(:disabled){background:#4f46e5}
+    .generate-btn:disabled{opacity:.6;cursor:not-allowed}
+    .spinner{display:inline-block;width:16px;height:16px;border:2px solid transparent;border-top-color:white;border-radius:50%;animation:spin .8s linear infinite;margin-right:8px;vertical-align:middle}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .results{margin-top:16px;display:flex;flex-wrap:wrap;gap:12px}
+    .result-img{width:180px;height:180px;object-fit:cover;border-radius:8px;border:1px solid #eee;background:#f0f0f0}
+    .thumb{width:64px;height:64px;object-fit:cover;border-radius:4px;border:1px solid #ddd;background:#eee}
+    .avatar{width:48px;height:48px;border-radius:50%;object-fit:cover;border:1px solid #ddd}
+    .status{margin-top:12px;padding:8px 12px;border-radius:6px;font-size:13px}
+    .status.generating{background:#eef2ff;color:#4f46e5}
+    .status.ready{background:#ecfdf5;color:#065f46}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Test F: Generador simulado (3 variantes)</h1>
+    <p class="hint">Variante 1: añade nueva imagen. Variante 2: reemplaza misma <img> cambiando src. Variante 3: miniatura 64px + avatar que NO deben contarse.</p>
+
+    <div class="variant">
+      <h2 class="variant-title">Variante 1: Añade nueva imagen</h2>
+      <textarea class="prompt-area" id="prompt-1" placeholder="Prompt para variante 1..."></textarea>
+      <button class="generate-btn" id="gen-1">Generar</button>
+      <div class="status" id="status-1"></div>
+      <div class="results" id="results-1"></div>
+    </div>
+
+    <div class="variant">
+      <h2 class="variant-title">Variante 2: Reemplaza misma imagen (cambia src)</h2>
+      <textarea class="prompt-area" id="prompt-2" placeholder="Prompt para variante 2..."></textarea>
+      <button class="generate-btn" id="gen-2">Generar</button>
+      <div class="status" id="status-2"></div>
+      <div class="results" id="results-2">
+        <img id="fixed-img-2" class="result-img" src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgZmlsbD0iI2VlZSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiIgZm9udC1zaXplPSIyNCIgZmlsbD0iOTk5IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIj5JbWFnZW4gaW5pY2lhbDwvdGV4dD48L3N2Zz4=" alt="Imagen inicial">
+      </div>
+    </div>
+
+    <div class="variant">
+      <h2 class="variant-title">Variante 3: Miniatura + Avatar (no deben contarse)</h2>
+      <textarea class="prompt-area" id="prompt-3" placeholder="Prompt para variante 3..."></textarea>
+      <button class="generate-btn" id="gen-3">Generar</button>
+      <div class="status" id="status-3"></div>
+      <div class="results" id="results-3">
+        <img class="thumb" src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiBmaWxsPSIjZWVlIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmb250LXNpemU9IjEwIiBmaWxsPSI5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPk1pbmk8L3RleHQ+PC9zdmc+" alt="Miniatura 64px">
+        <img class="avatar" src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMjQiIGN5PSIyNCIgcj0iMjQiIGZpbGw9IiNlZWUiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtc2l6ZT0iMTAiIGZpbGw9Ijk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZG9taW5hbnQtYmFzZWxpbmU9Im1pZGRsZSI+QXZhdGFyPC90ZXh0Pjwvc3ZnPg==" alt="Avatar">
+      </div>
+    </div>
+  </div>
+  <script>
+    const placeholderImages = [
+      'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgZmlsbD0iIzYzNjZGMSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiIgZm9udC1zaXplPSIyNCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPkltYWdlbiAxPC90ZXh0Pjwvc3ZnPg==',
+      'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgZmlsbD0iIzIyYzU1ZSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiIgZm9udC1zaXplPSIyNCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPkltYWdlbiAyPC90ZXh0Pjwvc3ZnPg==',
+      'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgZmlsbD0iI2Y1OWUwYiIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiIgZm9udC1zaXplPSIyNCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPkltYWdlbiAzPC90ZXh0Pjwvc3ZnPg==',
+      'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgZmlsbD0iI2VmNDQ0NCIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiIgZm9udC1zaXplPSIyNCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPkltYWdlbiA0PC90ZXh0Pjwvc3ZnPg==',
+      'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgZmlsbD0iIzhjNTRmZiIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiIgZm9udC1zaXplPSIyNCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGRvbWluYW50LWJhc2VsaW5lPSJtaWRkbGUiPkltYWdlbiA1PC90ZXh0Pjwvc3ZnPg=='
+    ];
+    let imgIdx = 0;
+
+    // Variante 1: añade nueva imagen
+    const gen1 = document.getElementById('gen-1');
+    const status1 = document.getElementById('status-1');
+    const results1 = document.getElementById('results-1');
+    gen1.addEventListener('click', async () => {
+      const p = document.getElementById('prompt-1').value.trim(); if(!p) return;
+      gen1.disabled=true; gen1.style.opacity='.6';
+      status1.textContent='Generando...'; status1.className='status generating';
+      await new Promise(r=>setTimeout(r,4000));
+      const img=document.createElement('img'); img.src=placeholderImages[imgIdx%placeholderImages.length]; img.className='result-img'; img.alt=`Img ${imgIdx+1}`; results1.appendChild(img); imgIdx++;
+      gen1.disabled=false; gen1.style.opacity='1';
+      status1.textContent='Imagen generada ✓'; status1.className='status ready';
+    });
+
+    // Variante 2: reemplaza misma imagen
+    const gen2 = document.getElementById('gen-2');
+    const status2 = document.getElementById('status-2');
+    const fixedImg2 = document.getElementById('fixed-img-2');
+    gen2.addEventListener('click', async () => {
+      const p = document.getElementById('prompt-2').value.trim(); if(!p) return;
+      gen2.disabled=true; gen2.style.opacity='.6';
+      status2.textContent='Generando...'; status2.className='status generating';
+      await new Promise(r=>setTimeout(r,4000));
+      fixedImg2.src = placeholderImages[imgIdx%placeholderImages.length]; imgIdx++;
+      gen2.disabled=false; gen2.style.opacity='1';
+      status2.textContent='Imagen reemplazada ✓'; status2.className='status ready';
+    });
+
+    // Variante 3: miniatura + avatar
+    const gen3 = document.getElementById('gen-3');
+    const status3 = document.getElementById('status-3');
+    const results3 = document.getElementById('results-3');
+    gen3.addEventListener('click', async () => {
+      const p = document.getElementById('prompt-3').value.trim(); if(!p) return;
+      gen3.disabled=true; gen3.style.opacity='.6';
+      status3.textContent='Generando...'; status3.className='status generating';
+      await new Promise(r=>setTimeout(r,4000));
+      const img=document.createElement('img'); img.src=placeholderImages[imgIdx%placeholderImages.length]; img.className='result-img'; img.alt=`Img ${imgIdx+1}`; results3.appendChild(img); imgIdx++;
+      gen3.disabled=false; gen3.style.opacity='1';
+      status3.textContent='Imagen generada ✓'; status3.className='status ready';
+    });
+  </script>
+</body>
+</html>
