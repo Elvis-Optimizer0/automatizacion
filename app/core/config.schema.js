@@ -132,9 +132,10 @@ function migrateProject(data) {
       if (img.file && typeof img.file === 'object' && img.file.name) {
         return { file: img.file.name, focus: img.focus || { x: 0.5, y: 0.5 } };
       }
-      // Si ya tiene file como string, mantenerlo
+      // Si ya tiene file como string, extraer solo el nombre del archivo (basename)
       if (img.file && typeof img.file === 'string') {
-        return { file: img.file, focus: img.focus || { x: 0.5, y: 0.5 } };
+        const basename = img.file.split(/[\\/]/).pop();
+        return { file: basename, focus: img.focus || { x: 0.5, y: 0.5 } };
       }
       return img;
     });
@@ -144,12 +145,19 @@ function migrateProject(data) {
     data.narration = { file: data.narration };
   } else if (data.narration && data.narration.file && typeof data.narration.file === 'object' && data.narration.file.name) {
     data.narration = { file: data.narration.file.name, blobUrl: data.narration.blobUrl };
+  } else if (data.narration && data.narration.file && typeof data.narration.file === 'string') {
+    // Si es string (ruta completa), extraer basename
+    const basename = data.narration.file.split(/[\\/]/).pop();
+    data.narration = { file: basename, blobUrl: data.narration.blobUrl };
   }
   // Migrar music igual
   if (data.music && typeof data.music === 'string') {
     data.music = { file: data.music };
   } else if (data.music && data.music.file && typeof data.music.file === 'object' && data.music.file.name) {
     data.music = { file: data.music.file.name, blobUrl: data.music.blobUrl, volume: data.music.volume };
+  } else if (data.music && data.music.file && typeof data.music.file === 'string') {
+    const basename = data.music.file.split(/[\\/]/).pop();
+    data.music = { file: basename, blobUrl: data.music.blobUrl, volume: data.music.volume };
   }
   return data;
 }
