@@ -12,7 +12,7 @@
   },
   "build": {
     "appId": "com.videomaker.app",
-    "productName": "Video Maker",
+    "productName": "Video Maker FIX",
     "files": [
       "app/**/*"
     ],
