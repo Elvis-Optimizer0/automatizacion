@@ -794,8 +794,14 @@ if (result.success) {
 function buildProject() {
   const getBasename = (val) => {
     if (!val) return 'file';
-    if (typeof val === 'object' && val.name) return val.name; // File object
-    if (typeof val === 'string') return val.split(/[\\/]/).pop(); // full path string
+    // File object
+    if (val instanceof File) return val.name;
+    if (val && typeof val === 'object' && val.name) return val.name;
+    // String path (Windows or Unix)
+    if (typeof val === 'string') {
+      const parts = val.split(/[\\/]/);
+      return parts[parts.length - 1] || 'file';
+    }
     return 'file';
   };
 
@@ -803,15 +809,15 @@ function buildProject() {
     images: state.images.map(img => ({
       file: getBasename(img.file),
       focus: img.focus || { x: 0.5, y: 0.5 },
-      blobUrl: img.path || (img.file && typeof img.file === 'object' ? URL.createObjectURL(img.file) : img.path)
+      blobUrl: img.path || (img.file instanceof File ? URL.createObjectURL(img.file) : (img.file && typeof img.file === 'object' && img.file.name ? URL.createObjectURL(img.file) : img.path))
     })),
     narration: {
       file: getBasename(state.narration?.file),
-      blobUrl: state.narration?.path || (state.narration?.file && typeof state.narration.file === 'object' ? URL.createObjectURL(state.narration.file) : state.narration?.path)
+      blobUrl: state.narration?.path || (state.narration?.file instanceof File ? URL.createObjectURL(state.narration.file) : (state.narration?.file && typeof state.narration.file === 'object' ? URL.createObjectURL(state.narration.file) : state.narration?.path))
     },
     music: state.music ? {
       file: getBasename(state.music.file),
-      blobUrl: state.music.path || (state.music.file && typeof state.music.file === 'object' ? URL.createObjectURL(state.music.file) : state.music.path),
+      blobUrl: state.music.path || (state.music.file instanceof File ? URL.createObjectURL(state.music.file) : (state.music.file && typeof state.music.file === 'object' ? URL.createObjectURL(state.music.file) : state.music.path)),
       volume: state.music.volume
     } : undefined,
     script: state.script,
