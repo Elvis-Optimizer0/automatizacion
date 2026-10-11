@@ -40,8 +40,8 @@ const NarrationSchema = z.object({
     const basename = val.split(/[\\/]/).pop() || val;
     return /\.(mp3|wav|m4a|aac)$/i.test(basename);
   }, { message: 'El archivo de narración debe ser mp3, wav, m4a o aac' }),
-  blobUrl: z.string().optional(),
-  realPath: z.string().optional()
+  path: z.string().min(1, 'La ruta del archivo de narración es requerida'),
+  blobUrl: z.string().optional()
 }).optional();
 
 const MusicSchema = z.object({
@@ -49,8 +49,8 @@ const MusicSchema = z.object({
     const basename = val.split(/[\\/]/).pop() || val;
     return /\.(mp3|wav|m4a|aac)$/i.test(basename);
   }, { message: 'El archivo de música debe ser mp3, wav, m4a o aac' }),
+  path: z.string().min(1, 'La ruta del archivo de música es requerida'),
   blobUrl: z.string().optional(),
-  realPath: z.string().optional(),
   volume: z.number().min(0).max(1).default(0.12)
 }).optional();
 
@@ -65,7 +65,7 @@ const ImageWithFocusSchema = z.object({
     return /\.(png|jpg|jpeg|webp|mp4)$/i.test(basename);
   }, { message: 'El archivo debe tener una extensión válida: png, jpg, jpeg, webp o mp4' }),
   focus: FocusPointSchema.optional(),
-  realPath: z.string().optional(),
+  path: z.string().min(1, 'La ruta del archivo es requerida'),
   blobUrl: z.string().optional()
 });
 
@@ -140,49 +140,49 @@ function migrateProject(data) {
     data.images = data.images.map(img => {
       // If it's a File object directly
       if (img instanceof File) {
-        return { file: img.name, focus: { x: 0.5, y: 0.5 } };
+        return { file: img.name, path: img.path || img.name, focus: { x: 0.5, y: 0.5 } };
       }
-      // If it's a string
+      // If it's a string (path)
       if (typeof img === 'string') {
-        return { file: img, focus: { x: 0.5, y: 0.5 } };
+        return { file: img, path: img, focus: { x: 0.5, y: 0.5 } };
       }
       // If it's a File object in an object wrapper
       if (img.file && typeof img.file === 'object' && img.file instanceof File) {
-        return { file: img.file.name, focus: img.focus || { x: 0.5, y: 0.5 }, realPath: img.realPath, blobUrl: img.blobUrl };
+        return { file: img.file.name, path: img.path || img.file.name, focus: img.focus || { x: 0.5, y: 0.5 }, blobUrl: img.blobUrl };
       }
       // If it's an object with file property that's a File object
       if (img.file && typeof img.file === 'object' && img.file.name && !(img.file instanceof File)) {
-        return { file: img.file.name, focus: img.focus || { x: 0.5, y: 0.5 }, realPath: img.realPath, blobUrl: img.blobUrl };
+        return { file: img.file.name, path: img.path || '', focus: img.focus || { x: 0.5, y: 0.5 }, blobUrl: img.blobUrl };
       }
       // If it's an object with file as string
       if (img.file && typeof img.file === 'string') {
         const basename = img.file.split(/[\\/]/).pop();
-        return { file: basename, focus: img.focus || { x: 0.5, y: 0.5 }, realPath: img.realPath, blobUrl: img.blobUrl };
+        return { file: basename, path: img.path || img.file, focus: img.focus || { x: 0.5, y: 0.5 }, blobUrl: img.blobUrl };
       }
       return img;
     });
   }
   // Migrate narration if it's string or File object
   if (data.narration && typeof data.narration === 'string') {
-    data.narration = { file: data.narration };
+    data.narration = { file: data.narration, path: data.narration };
   } else if (data.narration && data.narration.file instanceof File) {
-    data.narration = { file: data.narration.file.name, realPath: data.narration.realPath, blobUrl: data.narration.blobUrl };
+    data.narration = { file: data.narration.file.name, path: data.narration.path || data.narration.file.name, blobUrl: data.narration.blobUrl };
   } else if (data.narration && data.narration.file && typeof data.narration.file === 'object' && data.narration.file.name && !(data.narration.file instanceof File)) {
-    data.narration = { file: data.narration.file.name, realPath: data.narration.realPath, blobUrl: data.narration.blobUrl };
+    data.narration = { file: data.narration.file.name, path: data.narration.path || '', blobUrl: data.narration.blobUrl };
   } else if (data.narration && data.narration.file && typeof data.narration.file === 'string') {
     const basename = data.narration.file.split(/[\\/]/).pop();
-    data.narration = { file: basename, realPath: data.narration.realPath, blobUrl: data.narration.blobUrl };
+    data.narration = { file: basename, path: data.narration.path || data.narration.file, blobUrl: data.narration.blobUrl };
   }
   // Migrate music equal
   if (data.music && typeof data.music === 'string') {
-    data.music = { file: data.music };
+    data.music = { file: data.music, path: data.music };
   } else if (data.music && data.music.file instanceof File) {
-    data.music = { file: data.music.file.name, realPath: data.music.realPath, blobUrl: data.music.blobUrl, volume: data.music.volume };
+    data.music = { file: data.music.file.name, path: data.music.path || data.music.file.path || data.music.file.name, blobUrl: data.music.blobUrl, volume: data.music.volume };
   } else if (data.music && data.music.file && typeof data.music.file === 'object' && data.music.file.name && !(data.music.file instanceof File)) {
-    data.music = { file: data.music.file.name, realPath: data.music.realPath, blobUrl: data.music.blobUrl, volume: data.music.volume };
+    data.music = { file: data.music.file.name, path: data.music.path || '', blobUrl: data.music.blobUrl, volume: data.music.volume };
   } else if (data.music && data.music.file && typeof data.music.file === 'string') {
     const basename = data.music.file.split(/[\\/]/).pop();
-    data.music = { file: basename, realPath: data.music.realPath, blobUrl: data.music.blobUrl, volume: data.music.volume };
+    data.music = { file: basename, path: data.music.path || data.music.file, blobUrl: data.music.blobUrl, volume: data.music.volume };
   }
   return data;
 }

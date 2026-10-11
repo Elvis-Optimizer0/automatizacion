@@ -193,10 +193,10 @@ function setupImages() {
     }
     const newImages = [];
     for (const f of validFiles) {
-      const realPath = await window.api.getRealPath(f);
+      const path = await window.api.getRealPath(f);
       newImages.push({
         name: f.name,
-        realPath,
+        path,
         blobUrl: URL.createObjectURL(f),
         size: f.size,
         type: f.name.toLowerCase().endsWith('.mp4') ? 'video' : 'image'
@@ -221,8 +221,8 @@ function setupAudio() {
       showToast('Formato de audio no válido');
       return;
     }
-    const realPath = await window.api.getRealPath(file);
-    state.narration = { name: file.name, realPath, blobUrl: URL.createObjectURL(file), size: file.size };
+    const path = await window.api.getRealPath(file);
+    state.narration = { name: file.name, path, blobUrl: URL.createObjectURL(file), size: file.size };
     updateNarrationUI();
     updateTimelineButton();
   });
@@ -233,8 +233,8 @@ function setupAudio() {
       showToast('Formato de audio no válido');
       return;
     }
-    const realPath = await window.api.getRealPath(file);
-    state.music = { name: file.name, realPath, blobUrl: URL.createObjectURL(file), size: file.size, volume: 0.12 };
+    const path = await window.api.getRealPath(file);
+    state.music = { name: file.name, path, blobUrl: URL.createObjectURL(file), size: file.size, volume: 0.12 };
     updateMusicUI();
   });
 
@@ -306,7 +306,7 @@ function updateMusicUI() {
 }
 
 async function getAudioDuration(item) {
-  const result = await window.api.getAudioDuration(item.blobUrl);
+  const result = await window.api.getAudioDuration(item.path);
   if (!result.success) throw new Error(result.error);
   return result.duration;
 }
@@ -795,18 +795,18 @@ function buildProject() {
   return {
     images: state.images.map(img => ({
       file: img.name,
-      realPath: img.realPath,
+      path: img.path,
       blobUrl: img.blobUrl,
       focus: img.focus || { x: 0.5, y: 0.5 }
     })),
     narration: state.narration ? {
       file: state.narration.name,
-      realPath: state.narration.realPath,
+      path: state.narration.path,
       blobUrl: state.narration.blobUrl
     } : undefined,
     music: state.music ? {
       file: state.music.name,
-      realPath: state.music.realPath,
+      path: state.music.path,
       blobUrl: state.music.blobUrl,
       volume: state.music.volume
     } : undefined,

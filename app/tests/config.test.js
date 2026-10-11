@@ -184,36 +184,42 @@ describe('config.schema', () => {
     it('accepts images with focus point', () => {
       const result = validateProject({
         ...validProject,
-        images: [{ file: 'scene1.png', focus: { x: 0.3, y: 0.7 } }, 'scene2.png']
+        images: [{ file: 'scene1.png', focus: { x: 0.3, y: 0.7 }, path: 'scene1.png' }, { file: 'scene2.png', path: 'scene2.png' }]
       });
-      expect(result.images[0]).toEqual({ file: 'scene1.png', focus: { x: 0.3, y: 0.7 } });
-      expect(result.images[1]).toEqual({ file: 'scene2.png', focus: { x: 0.5, y: 0.5 } });
+      expect(result.images[0]).toEqual({ file: 'scene1.png', focus: { x: 0.3, y: 0.7 }, path: 'scene1.png', blobUrl: undefined });
+      expect(result.images[1]).toEqual({ file: 'scene2.png', focus: { x: 0.5, y: 0.5 }, path: 'scene2.png', blobUrl: undefined });
     });
   });
 
   describe('validateProject with File objects (simulated)', () => {
     it('accepts File objects for images and extracts basename', () => {
       const mockFile = new File(['test'], 'escena1.png', { type: 'image/png' });
+      Object.defineProperty(mockFile, 'path', { value: 'C:/fake/path/escena1.png', writable: true });
       const project = {
-        images: [mockFile, 'scene2.png'],
+        images: [mockFile, { file: 'scene2.png', path: 'scene2.png' }],
         narration: { file: new File(['audio'], 'voz.mp3', { type: 'audio/mpeg' }) },
         config: {}
       };
+      Object.defineProperty(project.narration.file, 'path', { value: 'C:/fake/path/voz.mp3', writable: true });
       const result = validateProject(project);
       expect(result.images[0].file).toBe('escena1.png');
+      expect(result.images[0].path).toBe('C:/fake/path/escena1.png');
       expect(result.images[1].file).toBe('scene2.png');
       expect(result.narration.file).toBe('voz.mp3');
     });
 
     it('accepts File object for music', () => {
+      const mockMusicFile = new File(['audio'], 'musica.mp3', { type: 'audio/mpeg' });
+      Object.defineProperty(mockMusicFile, 'path', { value: 'C:/fake/path/musica.mp3', writable: true });
       const project = {
-        images: ['scene1.png'],
-        narration: { file: 'voz.mp3' },
-        music: { file: new File(['audio'], 'musica.mp3', { type: 'audio/mpeg' }), volume: 0.5 },
+        images: [{ file: 'scene1.png', path: 'scene1.png' }],
+        narration: { file: 'voz.mp3', path: 'voz.mp3' },
+        music: { file: mockMusicFile, volume: 0.5 },
         config: {}
       };
       const result = validateProject(project);
       expect(result.music.file).toBe('musica.mp3');
+      expect(result.music.path).toBe('C:/fake/path/musica.mp3');
       expect(result.music.volume).toBe(0.5);
     });
   });
