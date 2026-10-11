@@ -128,8 +128,28 @@ function migrateProject(data) {
       if (typeof img === 'string') {
         return { file: img, focus: { x: 0.5, y: 0.5 } };
       }
+      // Si es File object, extraer nombre
+      if (img.file && typeof img.file === 'object' && img.file.name) {
+        return { file: img.file.name, focus: img.focus || { x: 0.5, y: 0.5 } };
+      }
+      // Si ya tiene file como string, mantenerlo
+      if (img.file && typeof img.file === 'string') {
+        return { file: img.file, focus: img.focus || { x: 0.5, y: 0.5 } };
+      }
       return img;
     });
+  }
+  // Migrar narration si es string o File object
+  if (data.narration && typeof data.narration === 'string') {
+    data.narration = { file: data.narration };
+  } else if (data.narration && data.narration.file && typeof data.narration.file === 'object' && data.narration.file.name) {
+    data.narration = { file: data.narration.file.name, blobUrl: data.narration.blobUrl };
+  }
+  // Migrar music igual
+  if (data.music && typeof data.music === 'string') {
+    data.music = { file: data.music };
+  } else if (data.music && data.music.file && typeof data.music.file === 'object' && data.music.file.name) {
+    data.music = { file: data.music.file.name, blobUrl: data.music.blobUrl, volume: data.music.volume };
   }
   return data;
 }
