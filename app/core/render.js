@@ -40,8 +40,11 @@ function getAudioDuration(audioPath) {
 }
 
 function renderVideo(project, timeline, fontPath, outputPath, onProgress) {
+  const outputConfigs = buildOutputConfigs(project.config);
+  const outputConfig = outputConfigs[0] || { w: 1080, h: 1920, resolution: '9:16' };
+  
   return new Promise((resolve, reject) => {
-    const args = buildFfmpegArgs(project, timeline, fontPath, outputPath);
+    const args = buildFfmpegArgs(project, timeline, fontPath, outputPath, outputConfig);
     const ffmpeg = getFfmpegPath();
 
     const proc = spawn(ffmpeg, args, { windowsHide: true });
@@ -88,6 +91,7 @@ function renderVideo(project, timeline, fontPath, outputPath, onProgress) {
 }
 
 function renderPreview(project, timeline, fontPath, outputPath, onProgress) {
+  const outputConfig = buildOutputConfigs(project.config)[0] || { w: 1080, h: 1920, resolution: '9:16' };
   const previewProject = {
     ...project,
     config: {
@@ -104,7 +108,7 @@ function renderPreview(project, timeline, fontPath, outputPath, onProgress) {
     }))
   };
 
-  const args = buildFfmpegArgs(previewProject, previewTimeline, fontPath, outputPath);
+  const args = buildFfmpegArgs(previewProject, previewTimeline, fontPath, outputPath, outputConfig);
   const ffmpeg = getFfmpegPath();
 
   return new Promise((resolve, reject) => {
@@ -145,6 +149,8 @@ function renderPreview(project, timeline, fontPath, outputPath, onProgress) {
 
 async function renderAllOutputs(project, timeline, fontPath, outputDir, onProgress) {
   const outputConfigs = buildOutputConfigs(project.config);
+  console.log('[renderAllOutputs] project.config.outputs:', JSON.stringify(project.config.outputs));
+  console.log('[renderAllOutputs] outputConfigs:', JSON.stringify(outputConfigs));
   const baseName = path.basename(project.narration, path.extname(project.narration));
   const results = [];
   const errors = [];

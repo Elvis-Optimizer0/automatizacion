@@ -243,6 +243,9 @@ function buildFilterComplex(project, timeline, fontPath) {
 }
 
 function buildFfmpegArgs(project, timeline, fontPath, outputPath, outputConfig) {
+  if (!outputConfig || typeof outputConfig.w !== 'number' || typeof outputConfig.h !== 'number') {
+    throw new Error(`buildFfmpegArgs: outputConfig inválido: ${JSON.stringify(outputConfig)}`);
+  }
   const { config } = project;
   const { scenes, audioDuration } = timeline;
   const fps = config.fps;
@@ -302,6 +305,9 @@ function buildFfmpegArgs(project, timeline, fontPath, outputPath, outputConfig) 
 }
 
 function buildFilterComplexForOutput(project, timeline, fontPath, outputConfig) {
+  if (!outputConfig || typeof outputConfig.w !== 'number' || typeof outputConfig.h !== 'number') {
+    throw new Error(`buildFilterComplexForOutput: outputConfig inválido: ${JSON.stringify(outputConfig)}`);
+  }
   const { config } = project;
   const { scenes, totalDuration } = timeline;
   const fps = config.fps;
