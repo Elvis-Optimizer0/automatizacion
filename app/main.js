@@ -97,6 +97,14 @@ ipcMain.handle('openFolder', async (event, folderPath) => {
 
 ipcMain.handle('buildTimeline', async (event, project) => {
   try {
+    // DEBUG: Log exact values before validation
+    const img0file = project.images?.[0]?.file;
+    const img0blob = project.images?.[0]?.blobUrl;
+    const narFile = project.narration?.file;
+    console.log('[DEBUG buildTimeline] images[0].file =', JSON.stringify(img0file));
+    console.log('[DEBUG buildTimeline] images[0].blobUrl =', JSON.stringify(img0blob));
+    console.log('[DEBUG buildTimeline] narration.file =', JSON.stringify(narFile));
+    
     const validated = validateProject(project);
     const audioDuration = await getAudioDuration(validated.narration);
     const timeline = buildTimeline(validated, audioDuration);
@@ -107,7 +115,12 @@ ipcMain.handle('buildTimeline', async (event, project) => {
 
     return { success: true, timeline };
   } catch (err) {
-    return { success: false, error: err.message };
+    // Include debug values in error for UI
+    const img0file = project.images?.[0]?.file;
+    const img0blob = project.images?.[0]?.blobUrl;
+    const narFile = project.narration?.file;
+    const debugInfo = `\nDEBUG: images[0].file="${img0file}" | images[0].blobUrl="${project.images?.[0]?.blobUrl}" | narration.file="${narFile}"`;
+    return { success: false, error: err.message + debugInfo };
   }
 });
 
