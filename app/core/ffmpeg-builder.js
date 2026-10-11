@@ -289,7 +289,7 @@ function buildFfmpegArgs(project, timeline, fontPath, outputPath, outputConfig) 
 
   for (let i = 0; i < scenes.length; i++) {
     const scene = scenes[i];
-    const inputPath = scene.blobUrl || scene.file;
+    const inputPath = scene.realPath || scene.blobUrl || scene.file;
     if (scene.isVideo) {
       inputs.push('-stream_loop', '-1', '-i', inputPath);
     } else {
