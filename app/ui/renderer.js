@@ -793,9 +793,20 @@ if (result.success) {
 
 function buildProject() {
   return {
-    images: state.images.map(img => img.path || URL.createObjectURL(img.file)),
-    narration: state.narration.path || URL.createObjectURL(state.narration.file),
-    music: state.music ? { file: state.music.path || URL.createObjectURL(state.music.file), volume: state.music.volume } : undefined,
+    images: state.images.map(img => ({
+      file: img.file?.name || img.name || 'image.png',
+      focus: img.focus || { x: 0.5, y: 0.5 },
+      blobUrl: img.path || URL.createObjectURL(img.file)
+    })),
+    narration: {
+      file: state.narration.file?.name || state.narration.name || 'narration.mp3',
+      blobUrl: state.narration.path || URL.createObjectURL(state.narration.file)
+    },
+    music: state.music ? {
+      file: state.music.file?.name || state.music.name || 'music.mp3',
+      blobUrl: state.music.path || URL.createObjectURL(state.music.file),
+      volume: state.music.volume
+    } : undefined,
     script: state.script,
     config: state.config,
     sceneDurationOverrides: state.sceneDurationOverrides

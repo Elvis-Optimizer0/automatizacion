@@ -27,14 +27,14 @@ describe('config.schema', () => {
   describe('validateProject', () => {
     const validProject = {
       images: ['scene1.png', 'scene2.png'],
-      narration: 'voz.mp3',
+      narration: { file: 'voz.mp3' },
       config: {}
     };
 
     it('accepts valid project', () => {
       const result = validateProject(validProject);
       expect(result.images).toHaveLength(2);
-      expect(result.narration).toBe('voz.mp3');
+      expect(result.narration.file).toBe('voz.mp3');
     });
 
     it('applies default config', () => {
@@ -62,14 +62,14 @@ describe('config.schema', () => {
     });
 
     it('rejects invalid narration extension', () => {
-      expect(() => validateProject({ ...validProject, narration: 'voz.txt' })).toThrow();
+      expect(() => validateProject({ ...validProject, narration: { file: 'voz.txt' } })).toThrow();
     });
 
     it('accepts valid narration extensions', () => {
       const exts = ['mp3', 'wav', 'm4a', 'aac'];
       exts.forEach(ext => {
-        const result = validateProject({ ...validProject, narration: `voz.${ext}` });
-        expect(result.narration).toBe(`voz.${ext}`);
+        const result = validateProject({ ...validProject, narration: { file: `voz.${ext}` } });
+        expect(result.narration.file).toBe(`voz.${ext}`);
       });
     });
 

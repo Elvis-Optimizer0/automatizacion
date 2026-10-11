@@ -115,45 +115,47 @@ function buildContainFilter(W, H) {
 }
 
 function buildImageFilterChain(scene, W, H, fps, zoomEnabled, zoomConfig, fitMode) {
-  const { file, duration, zoomStyle, zoomIntensity, focus } = scene;
+  const { blobUrl, file, duration, zoomStyle, zoomIntensity, focus } = scene;
   const isVideo = file.toLowerCase().endsWith('.mp4');
+  const inputPath = scene.blobUrl || scene.file;
 
   if (isVideo) {
     const cropFilter = fitMode === 'crop' ? buildCropFilter(scene, W, H, fitMode) : '';
     const scaleFilter = cropFilter || `scale=${W}:${H}:force_original_aspect_ratio=cover`;
-    return `[${file}]${scaleFilter},pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,format=yuv420p,setsar=1,trim=duration=${duration}[v${scene.index}]`;
+    return `[${inputPath}]${scaleFilter},pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,format=yuv420p,setsar=1,trim=duration=${duration}[v${scene.index}]`;
   }
 
   if (fitMode === 'blur') {
     const blurBg = buildBlurFilter(W, H);
     const containFg = buildContainFilter(W, H);
     if (!zoomEnabled || zoomStyle === 'none') {
-      return `[${file}]${blurBg}[bg${scene.index}];[${file}]${containFg}[fg${scene.index}];[bg${scene.index}][fg${scene.index}]overlay=(W-w)/2:(H-h)/2,format=yuv420p,setsar=1,trim=duration=${duration}[v${scene.index}]`;
+      return `[${inputPath}]${blurBg}[bg${scene.index}];[${inputPath}]${containFg}[fg${scene.index}];[bg${scene.index}][fg${scene.index}]overlay=(W-w)/2:(H-h)/2,format=yuv420p,setsar=1,trim=duration=${duration}[v${scene.index}]`;
     }
     const zoomFilter = buildZoomFilter(zoomStyle, zoomConfig.initialScale, zoomConfig.intensity, duration, fps, W, H, zoomIntensity);
-    return `[${file}]${blurBg}[bg${scene.index}];[${file}]${containFg},${zoomFilter},format=yuv420p,setsar=1[fg${scene.index}];[bg${scene.index}][fg${scene.index}]overlay=(W-w)/2:(H-h)/2,trim=duration=${duration}[v${scene.index}]`;
+    return `[${inputPath}]${blurBg}[bg${scene.index}];[${inputPath}]${containFg},${zoomFilter},format=yuv420p,setsar=1[fg${scene.index}];[bg${scene.index}][fg${scene.index}]overlay=(W-w)/2:(H-h)/2,trim=duration=${duration}[v${scene.index}]`;
   }
 
   const cropFilter = buildCropFilter(scene, W, H, fitMode);
 
   if (!zoomEnabled || zoomStyle === 'none') {
-    return `[${file}]${cropFilter},pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,format=yuv420p,setsar=1,trim=duration=${duration}[v${scene.index}]`;
+    return `[${inputPath}]${cropFilter},pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,format=yuv420p,setsar=1,trim=duration=${duration}[v${scene.index}]`;
   }
 
   const zoomFilter = buildZoomFilter(zoomStyle, zoomConfig.initialScale, zoomConfig.intensity, duration, fps, W, H, zoomIntensity);
-  return `[${file}]${cropFilter},${zoomFilter},format=yuv420p,setsar=1[v${scene.index}]`;
+  return `[${inputPath}]${cropFilter},${zoomFilter},format=yuv420p,setsar=1[v${scene.index}]`;
 }
 
 function buildBadgeFilter(badge, W, H, sceneIndex, totalDuration) {
-  const { file, at, duration, sizePercent, position } = badge;
+  const { blobUrl, file, at, duration, sizePercent, position } = badge;
   const badgeW = Math.round(W * sizePercent / 100);
   const badgeH = Math.round(badgeW);
   const { x, y } = getPositionCoords(position, W, H, badgeW, badgeH);
+  const inputPath = badge.blobUrl || badge.file;
 
   const enableExpr = `between(t,${at},${at + duration})`;
   const popAnim = `scale=${badgeW}*min(1\,1.15*max(0\,1-4*(t-${at})))*gt(t\,${at})*lt(t\,${at}+0.4)+${badgeW}*gte(t\,${at}+0.4)`;
 
-  return `[${file}]scale=${badgeW}:${badgeH}:force_original_aspect_ratio=decrease,${popAnim}[badge${sceneIndex}];`;
+  return `[${inputPath}]scale=${badgeW}:${badgeH}:force_original_aspect_ratio=decrease,${popAnim}[badge${sceneIndex}];`;
 }
 
 function buildLowerThirdFilter(config, W, H, fontPath) {
@@ -250,20 +252,23 @@ function buildFfmpegArgs(project, timeline, fontPath, outputPath, outputConfig) 
 
   for (let i = 0; i < scenes.length; i++) {
     const scene = scenes[i];
+    const inputPath = scene.blobUrl || scene.file;
     if (scene.isVideo) {
-      inputs.push('-stream_loop', '-1', '-i', scene.file);
+      inputs.push('-stream_loop', '-1', '-i', inputPath);
     } else {
-      inputs.push('-i', scene.file);
+      inputs.push('-i', inputPath);
     }
   }
 
-  inputs.push('-i', project.narration);
+  const narrationPath = project.narration?.blobUrl || project.narration?.file;
+  inputs.push('-i', narrationPath);
 
   let audioFilter = '';
   let audioMap = '0:a';
 
-  if (project.music && project.music.file) {
-    inputs.push('-i', project.music.file);
+  if (project.music && (project.music.blobUrl || project.music.file)) {
+    const musicPath = project.music.blobUrl || project.music.file;
+    inputs.push('-i', musicPath);
     const musicVol = project.music.volume;
     audioFilter = `[0:a]volume=1[a0];[${scenes.length}:a]volume=${musicVol},afade=in:d=1,afade=out:st=${audioDuration - 2}:d=2,atrim=duration=${audioDuration}[a1];[a0][a1]amix=inputs=2:duration=first:dropout_transition=0[aout]`;
     audioMap = '[aout]';

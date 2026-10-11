@@ -35,8 +35,14 @@ const ProgressBarSchema = z.object({
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).default('#FF0000')
 });
 
+const NarrationSchema = z.object({
+  file: z.string().regex(/\.(mp3|wav|m4a|aac)$/i),
+  blobUrl: z.string().optional()
+}).optional();
+
 const MusicSchema = z.object({
-  file: z.string(),
+  file: z.string().regex(/\.(mp3|wav|m4a|aac)$/i),
+  blobUrl: z.string().optional(),
   volume: z.number().min(0).max(1).default(0.12)
 }).optional();
 
@@ -66,7 +72,7 @@ const ConfigSchema = z.object({
 
 const ProjectSchema = z.object({
   images: z.array(ImageWithFocusSchema).min(1),
-  narration: z.string().regex(/\.(mp3|wav|m4a|aac)$/i),
+  narration: NarrationSchema,
   music: MusicSchema,
   script: z.string().optional(),
   config: ConfigSchema.default({}),
