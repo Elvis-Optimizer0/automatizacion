@@ -792,19 +792,26 @@ if (result.success) {
 }
 
 function buildProject() {
+  const getBasename = (val) => {
+    if (!val) return 'file';
+    if (typeof val === 'object' && val.name) return val.name; // File object
+    if (typeof val === 'string') return val.split(/[\\/]/).pop(); // full path string
+    return 'file';
+  };
+
   return {
     images: state.images.map(img => ({
-      file: img.file?.name || img.name || 'image.png',
+      file: getBasename(img.file),
       focus: img.focus || { x: 0.5, y: 0.5 },
-      blobUrl: img.path || URL.createObjectURL(img.file)
+      blobUrl: img.path || (img.file && typeof img.file === 'object' ? URL.createObjectURL(img.file) : img.path)
     })),
     narration: {
-      file: state.narration.file?.name || state.narration.name || 'narration.mp3',
-      blobUrl: state.narration.path || URL.createObjectURL(state.narration.file)
+      file: getBasename(state.narration?.file),
+      blobUrl: state.narration?.path || (state.narration?.file && typeof state.narration.file === 'object' ? URL.createObjectURL(state.narration.file) : state.narration?.path)
     },
     music: state.music ? {
-      file: state.music.file?.name || state.music.name || 'music.mp3',
-      blobUrl: state.music.path || URL.createObjectURL(state.music.file),
+      file: getBasename(state.music.file),
+      blobUrl: state.music.path || (state.music.file && typeof state.music.file === 'object' ? URL.createObjectURL(state.music.file) : state.music.path),
       volume: state.music.volume
     } : undefined,
     script: state.script,
