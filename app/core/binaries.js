@@ -13,10 +13,15 @@ function getApp() {
   }
 }
 
+function fixAsarPath(p) {
+  if (!p) return p;
+  return p.replace(/app\.asar(?!\.unpacked)/, 'app.asar.unpacked');
+}
+
 function getUnpackedPath(packedPath) {
   const app = getApp();
   if (!app || !app.isPackaged) return packedPath;
-  return packedPath.replace('app.asar', 'app.asar.unpacked');
+  return fixAsarPath(packedPath);
 }
 
 function getFfmpegPath() {
@@ -38,6 +43,11 @@ function verifyBinaries() {
   const ffmpeg = getFfmpegPath();
   const ffprobe = getFfprobePath();
 
+  console.log('[verifyBinaries] ffmpeg path:', ffmpeg);
+  console.log('[verifyBinaries] ffprobe path:', ffprobe);
+  console.log('[verifyBinaries] ffmpeg exists:', fs.existsSync(ffmpeg));
+  console.log('[verifyBinaries] ffprobe exists:', fs.existsSync(ffprobe));
+
   if (!fs.existsSync(ffmpeg)) {
     throw new Error(`E_FFMPEG_MISSING: FFmpeg no encontrado en ${ffmpeg}`);
   }
@@ -47,4 +57,4 @@ function verifyBinaries() {
   return { ffmpeg, ffprobe };
 }
 
-module.exports = { getFfmpegPath, getFfprobePath, verifyBinaries };
+module.exports = { getFfmpegPath, getFfprobePath, verifyBinaries, fixAsarPath };
