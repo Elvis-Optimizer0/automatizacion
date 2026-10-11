@@ -21,14 +21,14 @@ function getUnpackedPath(packedPath) {
 
 function getFfmpegPath() {
   if (ffmpegPathCache) return ffmpegPathCache;
-  const packedPath = (typeof ffmpegStatic === 'string' ? ffmpegStatic : ffmpegStatic.path).replace('app.asar', 'app.asar.unpacked');
+  const packedPath = typeof ffmpegStatic === 'string' ? ffmpegStatic : ffmpegStatic.path;
   ffmpegPathCache = getUnpackedPath(packedPath);
   return ffmpegPathCache;
 }
 
 function getFfprobePath() {
   if (ffprobePathCache) return ffprobePathCache;
-  const packedPath = (typeof ffprobeStatic === 'string' ? ffprobeStatic : ffprobeStatic.path).replace('app.asar', 'app.asar.unpacked');
+  const packedPath = typeof ffprobeStatic === 'string' ? ffprobeStatic : ffprobeStatic.path;
   ffprobePathCache = getUnpackedPath(packedPath);
   return ffprobePathCache;
 }
