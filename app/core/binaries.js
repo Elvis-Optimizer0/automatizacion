@@ -15,7 +15,7 @@ function getApp() {
 
 function fixAsarPath(p) {
   if (!p) return p;
-  return p.replace(/app\.asar(?!\.unpacked)/, 'app.asar.unpacked');
+  return p.replace(/app\.asar(?:\.unpacked)*/g, 'app.asar.unpacked');
 }
 
 function getUnpackedPath(packedPath) {
