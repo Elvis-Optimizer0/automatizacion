@@ -150,8 +150,8 @@ function updateImagesUI() {
     <div class="preview-item" data-index="${index}">
       <span class="item-number">${index + 1}</span>
       ${img.type === 'video'
-        ? `<video src="${URL.createObjectURL(img.file)}" muted></video>`
-        : `<img src="${URL.createObjectURL(img.file)}" alt="Escena ${index + 1}">`
+        ? `<video src="${img.blobUrl}" muted></video>`
+        : `<img src="${img.blobUrl}" alt="Escena ${index + 1}">`
       }
       <button class="remove-btn" data-index="${index}" title="Quitar">✕</button>
     </div>
@@ -192,8 +192,8 @@ function setupImages() {
       showToast('Solo se permiten PNG, JPG, WEBP y MP4');
     }
     const newImages = validFiles.map(f => ({
-      file: f,
       name: f.name,
+      blobUrl: URL.createObjectURL(f),
       size: f.size,
       type: f.name.toLowerCase().endsWith('.mp4') ? 'video' : 'image'
     }));
@@ -216,7 +216,7 @@ function setupAudio() {
       showToast('Formato de audio no válido');
       return;
     }
-    state.narration = { file, name: file.name, size: file.size, path: URL.createObjectURL(file) };
+    state.narration = { name: file.name, blobUrl: URL.createObjectURL(file), size: file.size };
     updateNarrationUI();
     updateTimelineButton();
   });
@@ -227,7 +227,7 @@ function setupAudio() {
       showToast('Formato de audio no válido');
       return;
     }
-    state.music = { file, name: file.name, size: file.size, path: URL.createObjectURL(file), volume: 0.12 };
+    state.music = { name: file.name, blobUrl: URL.createObjectURL(file), size: file.size, volume: 0.12 };
     updateMusicUI();
   });
 
@@ -261,7 +261,7 @@ function updateNarrationUI() {
     content.hidden = true;
     info.hidden = false;
     nameEl.textContent = state.narration.name;
-    getAudioDuration(state.narration.file).then(d => {
+    getAudioDuration(state.narration).then(d => {
       durationEl.textContent = formatDuration(d);
     }).catch(() => {
       durationEl.textContent = '?';
@@ -286,7 +286,7 @@ function updateMusicUI() {
     nameEl.textContent = state.music.name;
     $('#music-volume').value = Math.round(state.music.volume * 100);
     $('#music-volume-value').textContent = `${Math.round(state.music.volume * 100)}%`;
-    getAudioDuration(state.music.file).then(d => {
+    getAudioDuration(state.music).then(d => {
       durationEl.textContent = formatDuration(d);
     }).catch(() => {
       durationEl.textContent = '?';
@@ -298,8 +298,8 @@ function updateMusicUI() {
   }
 }
 
-async function getAudioDuration(file) {
-  const result = await window.api.getAudioDuration(file.path || file);
+async function getAudioDuration(item) {
+  const result = await window.api.getAudioDuration(item.blobUrl);
   if (!result.success) throw new Error(result.error);
   return result.duration;
 }
@@ -595,14 +595,7 @@ async function buildTimeline() {
   btn.disabled = true;
   btn.textContent = 'Generando...';
 
-  const project = {
-    images: state.images.map(img => img.path || URL.createObjectURL(img.file)),
-    narration: state.narration.path || URL.createObjectURL(state.narration.file),
-    music: state.music ? { file: state.music.path || URL.createObjectURL(state.music.file), volume: state.music.volume } : undefined,
-    script: state.script,
-    config: state.config,
-    sceneDurationOverrides: state.sceneDurationOverrides
-  };
+  const project = buildProject();
 
   const result = await window.api.buildTimeline(project);
 
@@ -635,7 +628,7 @@ function renderTimeline(timeline) {
   body.innerHTML = timeline.scenes.map((scene, index) => `
     <tr data-index="${index}">
       <td>${index + 1}</td>
-      <td><img class="thumb" src="${scene.file}" alt="Escena ${index + 1}"></td>
+      <td><img class="thumb" src="${scene.blobUrl || scene.file}" alt="Escena ${index + 1}"></td>
       <td>${formatTime(scene.start)}</td>
       <td>${formatTime(scene.end)}</td>
       <td>
@@ -792,32 +785,19 @@ if (result.success) {
 }
 
 function buildProject() {
-  const getBasename = (val) => {
-    if (!val) return 'file';
-    // File object
-    if (val instanceof File) return val.name;
-    if (val && typeof val === 'object' && val.name) return val.name;
-    // String path (Windows or Unix)
-    if (typeof val === 'string') {
-      const parts = val.split(/[\\/]/);
-      return parts[parts.length - 1] || 'file';
-    }
-    return 'file';
-  };
-
   return {
     images: state.images.map(img => ({
-      file: getBasename(img.file),
-      focus: img.focus || { x: 0.5, y: 0.5 },
-      blobUrl: img.path || (img.file instanceof File ? URL.createObjectURL(img.file) : (img.file && typeof img.file === 'object' && img.file.name ? URL.createObjectURL(img.file) : img.path))
+      file: img.name,
+      blobUrl: img.blobUrl,
+      focus: img.focus || { x: 0.5, y: 0.5 }
     })),
-    narration: {
-      file: getBasename(state.narration?.file),
-      blobUrl: state.narration?.path || (state.narration?.file instanceof File ? URL.createObjectURL(state.narration.file) : (state.narration?.file && typeof state.narration.file === 'object' ? URL.createObjectURL(state.narration.file) : state.narration?.path))
-    },
+    narration: state.narration ? {
+      file: state.narration.name,
+      blobUrl: state.narration.blobUrl
+    } : undefined,
     music: state.music ? {
-      file: getBasename(state.music.file),
-      blobUrl: state.music.path || (state.music.file instanceof File ? URL.createObjectURL(state.music.file) : (state.music.file && typeof state.music.file === 'object' ? URL.createObjectURL(state.music.file) : state.music.path)),
+      file: state.music.name,
+      blobUrl: state.music.blobUrl,
       volume: state.music.volume
     } : undefined,
     script: state.script,
