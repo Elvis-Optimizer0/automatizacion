@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'promptQueueState';
+const STORAGE_KEY = 'colaPromptsState';
 const LOG_KEY = 'colaPromptsLogs';
 const MAX_LOGS = 50;
 
@@ -6,19 +6,9 @@ const defaultState = {
   queue: [],
   running: false,
   paused: false,
-  settings: {
-    delayBetweenMs: 3000,
-    timeoutPerPromptMs: 180000,
-    maxRetries: 2,
-    imagesPerPrompt: 1
-  },
-  selectors: {
-    input: null,
-    submit: null,
-    resultImage: null,
-    busyIndicator: null
-  },
-  selectorMeta: {}
+  settings: { delayBetweenMs: 3000, timeoutPerPromptMs: 180000, maxRetries: 2, imagesPerPrompt: 1, submitMethod: 'auto' },
+  siteProfiles: {},
+  logs: []
 };
 
 async function getState() {
@@ -97,19 +87,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
 
       case 'START_QUEUE': {
-        if (!state.selectors.input || !state.selectors.submit || !state.selectors.resultImage) {
-          sendResponse({ success: false, error: 'Primero calibra los selectores' });
-          break;
-        }
         state.running = true;
         state.paused = false;
         await saveState(state);
         await notifyPopup(state);
-        chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
-          if (tabs[0]?.id) {
-            chrome.tabs.sendMessage(tabs[0].id, { type: 'START_PROCESSING' });
-          }
-        });
         sendResponse({ success: true });
         break;
       }
@@ -128,11 +109,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         state.queue = state.queue.map(q => q.status === 'running' ? { ...q, status: 'pending' } : q);
         await saveState(state);
         await notifyPopup(state);
-        chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
-          if (tabs[0]?.id) {
-            chrome.tabs.sendMessage(tabs[0].id, { type: 'STOP_PROCESSING' });
-          }
-        });
         sendResponse({ success: true });
         break;
       }
@@ -145,25 +121,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         break;
       }
 
-      case 'SAVE_SELECTORS': {
-        state.selectors = { ...state.selectors, ...message.selectors };
-        if (message.selectorMeta) {
-          state.selectorMeta = { ...state.selectorMeta, ...message.selectorMeta };
-        }
+      case 'SAVE_PROFILE': {
+        const hostname = new URL(message.frameUrl).hostname;
+        if (!state.siteProfiles[hostname]) state.siteProfiles[hostname] = {};
+        state.siteProfiles[hostname] = { ...state.siteProfiles[hostname], ...message.profile, frameUrl: message.frameUrl };
         await saveState(state);
         await notifyPopup(state);
         sendResponse({ success: true });
         break;
       }
 
-      case 'ITEM_UPDATE': {
-        const idx = state.queue.findIndex(q => q.id === message.id);
-        if (idx >= 0) {
-          state.queue[idx] = { ...state.queue[idx], ...message.updates };
-          await saveState(state);
-          await notifyPopup(state);
-        }
+      case 'CLEAR_PROFILE': {
+        delete state.siteProfiles[message.hostname];
+        await saveState(state);
+        await notifyPopup(state);
         sendResponse({ success: true });
+        break;
+      }
+
+      case 'GET_PROFILE': {
+        sendResponse({ profile: state.siteProfiles[message.hostname] || null });
         break;
       }
 
@@ -190,13 +167,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true;
 });
 
-chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-  if (changeInfo.status === 'complete' && tab.url?.includes('google.com')) {
-    const state = await getState();
-    if (state.running && !state.paused) {
-      setTimeout(() => {
-        chrome.tabs.sendMessage(tabId, { type: 'START_PROCESSING' }).catch(() => {});
-      }, 1000);
-    }
+chrome.storage.onChanged.addListener(async (changes, area) => {
+  if (area !== 'local') return;
+  if (changes[STORAGE_KEY]) {
+    const state = changes[STORAGE_KEY].newValue || defaultState();
+    await notifyPopup(state);
   }
 });

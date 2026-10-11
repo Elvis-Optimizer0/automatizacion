@@ -1,13 +1,38 @@
-const $ = (id) => document.getElementById(id);
+const $ = (sel) => document.querySelector(sel);
 
 let currentTab = null;
 let currentFrameId = null;
 let currentDetection = null;
 let currentProfile = null;
 
+function escapeHtml(text) {
+  return text
+    .replace(/&/g, '&')
+    .replace(/</g, '<')
+    .replace(/>/g, '>')
+    .replace(/"/g, '"')
+    .replace(/'/g, '&#039;');
+}
+
 function formatTime(ms) { if (!ms || ms < 0) return 'calculando...'; const s = Math.floor(ms/1000), m = Math.floor(s/60), h = Math.floor(m/60); return h>0?`${h}h ${m%60}m`:m>0?`${m}m ${s%60}s`:`${s}s`; }
 
-function sendToContent(type, data={}) { if (!currentTab?.id) return Promise.resolve({error:'No tab'}); return new Promise(resolve => chrome.scripting.executeScript({target:{tabId:currentTab.id, allFrames:true, frameIds:currentFrameId?[currentFrameId]:undefined}, func: (t,d) => window.__colaPromptsContent?.[t]?.(d), args: [type, data]}).then(r => resolve(r?.[0]?.result)).catch(() => resolve({error:'No content script'}))); }
+function sendToContent(type, data={}) {
+  if (!currentTab?.id) return Promise.resolve({error:'No tab'});
+  const target = currentFrameId != null
+    ? { tabId: currentTab.id, frameIds: [currentFrameId] }
+    : { tabId: currentTab.id, allFrames: true };
+  return chrome.scripting.executeScript({
+    target,
+    func: (t, d) => window.__colaPromptsContent?.[t]?.(d),
+    args: [type, data]
+  }).then(rs => {
+    const ok = rs.filter(r => r.result && !r.result.error);
+    ok.sort((a, b) => (b.result.input?.score || 0) - (a.result.input?.score || 0));
+    const best = ok[0];
+    if (type === 'ENSURE_DETECTED' && best?.result?.input) currentFrameId = best.frameId;
+    return best ? best.result : (rs[0]?.result ?? { error: 'Sin respuesta de la página' });
+  }).catch(e => ({ error: e.message }));
+}
 
 function sendToPopup(type, data={}) { return new Promise(resolve => chrome.runtime.sendMessage({type, ...data}, resolve)); }
 
@@ -42,8 +67,8 @@ function renderQueue(queue) {
   if (!total) { list.innerHTML = '<div style="color:var(--text-dim);text-align:center;padding:20px;">Cola vacía</div>'; return; }
   list.innerHTML = queue.map(item => {
     const icons = {pending:'⏳',running:'⚙️',done:'✅',error:'❌'};
-    const err = item.error ? ` data-error="${item.error.replace(/"/g,'"')}"` : '';
-    return `<div class="queue-item"><span class="status-icon ${item.status}">${icons[item.status]||'⏳'}</span><span class="prompt-text" title="${item.text}">${item.text.slice(0,60)}</span>${item.status==='error'?`<span class="error-tooltip"${err}>⚠</span>`:''}</div>`;
+    const err = item.error ? ` data-error="${escapeHtml(item.error)}"` : '';
+    return `<div class="queue-item"><span class="status-icon ${item.status}">${icons[item.status]||'⏳'}</span><span class="prompt-text" title="${escapeHtml(item.text)}">${escapeHtml(item.text.slice(0,60))}</span>${item.status==='error'?`<span class="error-tooltip"${err}>⚠</span>`:''}</div>`;
   }).join('');
 }
 
@@ -58,7 +83,7 @@ function updateProgress(state) {
   else pt.textContent = 'Listo para iniciar';
 }
 
-function renderLogs() { chrome.storage.local.get('colaPromptsLogs', d => { const logs = d.colaPromptsLogs || []; $('#log-container').innerHTML = logs.map(e => { const t=e.substring(0,8), m=e.substring(9); let c='info'; if(m.startsWith('ERROR'))c='error';else if(m.includes('completad')||m.includes('guardado'))c='success';else if(m.includes('advert')||m.includes('warning'))c='warning'; return `<div class="log-entry ${c}"><span style="color:var(--text-dim)">${t}</span> ${m}</div>`; }).join(''); }); }
+function renderLogs() { chrome.storage.local.get('colaPromptsLogs', d => { const logs = d.colaPromptsLogs || []; $('#log-container').innerHTML = logs.map(e => { const t=e.substring(0,8), m=e.substring(9); let c='info'; if(m.startsWith('ERROR'))c='error';else if(m.includes('completad')||m.includes('guardado'))c='success';else if(m.includes('advert')||m.includes('warning'))c='warning'; return `<div class="log-entry ${c}"><span style="color:var(--text-dim)">${t}</span> ${escapeHtml(m)}</div>`; }).join(''); }); }
 
 async function renderDiagnostic() {
   const {siteProfiles={}} = await new Promise(r=>chrome.storage.local.get('siteProfiles',r));
@@ -200,7 +225,7 @@ function setup() {
   $('#retry-btn').onclick = async () => { await sendToPopup('RETRY_ERRORS'); loadState(); };
 
   ['setting-delay','setting-timeout','setting-retries','setting-images','setting-submit-method'].forEach(id => {
-    $(id).onchange = async () => {
+    $('#' + id).onchange = async () => {
       await sendToPopup('UPDATE_SETTINGS', {settings: {
         delayBetweenMs: parseFloat($('#setting-delay').value)*1000,
         timeoutPerPromptMs: parseFloat($('#setting-timeout').value)*1000,
