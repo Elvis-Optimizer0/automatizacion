@@ -178,20 +178,54 @@ function buildProgressBarFilter(config, W, H, totalDuration) {
   return `drawbox=x=0:y=${H - h}:w='${W}*t/${totalDuration}':h=${h}:color=${color}:t=fill`;
 }
 
+// Valid xfade transitions in FFmpeg 6.1+
+const XFADE_TRANSITIONS = new Set([
+  'fade', 'wipeleft', 'wiperight', 'wipeup', 'wipedown',
+  'slideleft', 'slideright', 'slideup', 'slidedown',
+  'circleopen', 'circleclose', 'distance',
+  'fadegrays', 'fadecolor', 'hfade', 'wfade',
+  'fadeblack', 'fadewhite', 'smooth', 'pixelize', 'diagbl', 'diagbr', 'diagtl', 'diagtr',
+  'hlslice', 'hrslice', 'vuslice', 'vdslice', 'dissolve', 'squeezeh', 'squeezev', 'zoomin', 'hlslide', 'hrslide', 'vslide'
+]);
+
+function resolveXfade(name, fps) {
+  if (!name || name === 'cut' || name === '') {
+    // cut = corte directo = fade con duración mínima de 1 frame
+    return { transition: 'fade', duration: 1 / fps };
+  }
+  if (XFADE_TRANSITIONS.has(name)) {
+    return { transition: name, duration: 0.5 };
+  }
+  throw new Error(`Transición xfade no válida: "${name}". Use una de: ${Array.from(XFADE_TRANSITIONS).join(', ')}`);
+}
+
 function buildTransitionChain(scenes, transitionDuration, W, H) {
   if (scenes.length === 1) return '';
 
   let chain = '';
   let prevLabel = 'v0';
 
+  // Acumulador de tiempo real (con solapes)
+  let acc = 0;
+
   for (let i = 1; i < scenes.length; i++) {
+    const prevScene = scenes[i - 1];
     const scene = scenes[i];
-    const t = scene.transitionType;
-    const T = t === 'cut' ? 0.001 : transitionDuration;
-    const offset = scene.start;
+
+    // Resuelve la transición
+    const { transition, duration } = resolveXfade(scene.transitionType, scene.fps || 30);
+
+    // El offset es el tiempo acumulado MENOS la duración de la transición
+    // (porque el xfade solapa el final de la anterior con el inicio de la actual)
+    const offset = acc - duration;
+
     const nextLabel = i === scenes.length - 1 ? 'vout' : `x${i}`;
 
-    chain += `[${prevLabel}][v${i}]xfade=transition=${t}:duration=${T}:offset=${offset}[${nextLabel}];`;
+    chain += `[${prevLabel}][v${i}]xfade=transition=${transition}:duration=${duration}:offset=${offset}[${nextLabel}];`;
+
+    // Actualiza acumulador: suma la duración de la escena anterior MENOS la transición
+    // (porque el solape ya se contó en la anterior)
+    acc += prevScene.duration - duration;
     prevLabel = nextLabel;
   }
 

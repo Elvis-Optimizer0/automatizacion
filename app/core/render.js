@@ -78,7 +78,9 @@ function renderVideo(project, timeline, fontPath, outputPath, onProgress) {
 
     proc.on('close', code => {
       if (code !== 0) {
-        reject(new Error(`E_FFMPEG_MISSING: FFmpeg falló (código ${code}): ${stderr}`));
+        const stderrLines = stderr.trim().split('\n');
+        const lastLines = stderrLines.slice(-15).join('\n');
+        reject(new Error(`E_FFMPEG_FAILED: FFmpeg falló (código ${code}):\n${lastLines}`));
         return;
       }
       resolve({ success: true, outputPath });
@@ -135,7 +137,9 @@ function renderPreview(project, timeline, fontPath, outputPath, onProgress) {
 
     proc.on('close', code => {
       if (code !== 0) {
-        reject(new Error(`E_FFMPEG_MISSING: FFmpeg falló (código ${code}): ${stderr}`));
+        const stderrLines = stderr.trim().split('\n');
+        const lastLines = stderrLines.slice(-15).join('\n');
+        reject(new Error(`E_FFMPEG_FAILED: FFmpeg falló (código ${code}):\n${lastLines}`));
         return;
       }
       resolve({ success: true, outputPath });
@@ -215,7 +219,9 @@ function renderVideoForOutput(project, timeline, fontPath, outputPath, outputCon
 
     proc.on('close', code => {
       if (code !== 0) {
-        reject(new Error(`E_FFMPEG_MISSING: FFmpeg falló (código ${code}): ${stderr}`));
+        const stderrLines = stderr.trim().split('\n');
+        const lastLines = stderrLines.slice(-15).join('\n');
+        reject(new Error(`E_FFMPEG_FAILED: FFmpeg falló (código ${code}):\n${lastLines}`));
         return;
       }
       resolve({ success: true, outputPath });
