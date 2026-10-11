@@ -106,7 +106,8 @@ ipcMain.handle('buildTimeline', async (event, project) => {
     console.log('[DEBUG buildTimeline] narration.file =', JSON.stringify(narFile));
     
     const validated = validateProject(project);
-    const audioDuration = await getAudioDuration(validated.narration);
+    const narrationPath = validated.narration?.realPath || validated.narration?.blobUrl || validated.narration?.file;
+    const audioDuration = await getAudioDuration(narrationPath);
     const timeline = buildTimeline(validated, audioDuration);
 
     if (timeline.durationDiff > 0.2) {

@@ -115,9 +115,9 @@ function buildContainFilter(W, H) {
 }
 
 function buildImageFilterChain(scene, W, H, fps, zoomEnabled, zoomConfig, fitMode) {
-  const { blobUrl, file, duration, zoomStyle, zoomIntensity, focus } = scene;
+  const { realPath, blobUrl, file, duration, zoomStyle, zoomIntensity, focus } = scene;
   const isVideo = file.toLowerCase().endsWith('.mp4');
-  const inputPath = scene.blobUrl || scene.file;
+  const inputPath = scene.realPath || scene.blobUrl || scene.file;
 
   if (isVideo) {
     const cropFilter = fitMode === 'crop' ? buildCropFilter(scene, W, H, fitMode) : '';
@@ -146,11 +146,11 @@ function buildImageFilterChain(scene, W, H, fps, zoomEnabled, zoomConfig, fitMod
 }
 
 function buildBadgeFilter(badge, W, H, sceneIndex, totalDuration) {
-  const { blobUrl, file, at, duration, sizePercent, position } = badge;
+  const { realPath, blobUrl, file, at, duration, sizePercent, position } = badge;
   const badgeW = Math.round(W * sizePercent / 100);
   const badgeH = Math.round(badgeW);
   const { x, y } = getPositionCoords(position, W, H, badgeW, badgeH);
-  const inputPath = badge.blobUrl || badge.file;
+  const inputPath = badge.realPath || badge.blobUrl || badge.file;
 
   const enableExpr = `between(t,${at},${at + duration})`;
   const popAnim = `scale=${badgeW}*min(1\,1.15*max(0\,1-4*(t-${at})))*gt(t\,${at})*lt(t\,${at}+0.4)+${badgeW}*gte(t\,${at}+0.4)`;
@@ -260,14 +260,14 @@ function buildFfmpegArgs(project, timeline, fontPath, outputPath, outputConfig) 
     }
   }
 
-  const narrationPath = project.narration?.blobUrl || project.narration?.file;
+  const narrationPath = project.narration?.realPath || project.narration?.blobUrl || project.narration?.file;
   inputs.push('-i', narrationPath);
 
   let audioFilter = '';
   let audioMap = '0:a';
 
-  if (project.music && (project.music.blobUrl || project.music.file)) {
-    const musicPath = project.music.blobUrl || project.music.file;
+  if (project.music && (project.music.realPath || project.music.blobUrl || project.music.file)) {
+    const musicPath = project.music.realPath || project.music.blobUrl || project.music.file;
     inputs.push('-i', musicPath);
     const musicVol = project.music.volume;
     audioFilter = `[0:a]volume=1[a0];[${scenes.length}:a]volume=${musicVol},afade=in:d=1,afade=out:st=${audioDuration - 2}:d=2,atrim=duration=${audioDuration}[a1];[a0][a1]amix=inputs=2:duration=first:dropout_transition=0[aout]`;

@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
   selectFiles: (options) => ipcRenderer.invoke('selectFiles', options),
@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('api', {
   getDefaultConfig: () => ipcRenderer.invoke('getDefaultConfig'),
   getFontPath: () => ipcRenderer.invoke('getFontPath'),
   getLastOutputDir: () => ipcRenderer.invoke('getLastOutputDir'),
+  getRealPath: (file) => webUtils.getPathForFile(file),
   onRenderProgress: (callback) => {
     const handler = (_event, data) => callback(data);
     ipcRenderer.on('render-progress', handler);
