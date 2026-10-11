@@ -125,14 +125,23 @@ function migrateProject(data) {
   }
   if (data.images && data.images.length > 0) {
     data.images = data.images.map(img => {
+      // If it's a File object directly
+      if (img instanceof File) {
+        return { file: img.name, focus: { x: 0.5, y: 0.5 } };
+      }
+      // If it's a string
       if (typeof img === 'string') {
         return { file: img, focus: { x: 0.5, y: 0.5 } };
       }
-      // Si es File object, extraer nombre
-      if (img.file && typeof img.file === 'object' && img.file.name) {
+      // If it's a File object in an object wrapper
+      if (img.file && typeof img.file === 'object' && img.file instanceof File) {
         return { file: img.file.name, focus: img.focus || { x: 0.5, y: 0.5 } };
       }
-      // Si ya tiene file como string, extraer solo el nombre del archivo (basename)
+      // If it's an object with file property that's a File object
+      if (img.file && typeof img.file === 'object' && img.file.name && !(img.file instanceof File)) {
+        return { file: img.file.name, focus: img.focus || { x: 0.5, y: 0.5 } };
+      }
+      // If it's an object with file as string
       if (img.file && typeof img.file === 'string') {
         const basename = img.file.split(/[\\/]/).pop();
         return { file: basename, focus: img.focus || { x: 0.5, y: 0.5 } };
@@ -140,20 +149,23 @@ function migrateProject(data) {
       return img;
     });
   }
-  // Migrar narration si es string o File object
+  // Migrate narration if it's string or File object
   if (data.narration && typeof data.narration === 'string') {
     data.narration = { file: data.narration };
-  } else if (data.narration && data.narration.file && typeof data.narration.file === 'object' && data.narration.file.name) {
+  } else if (data.narration && data.narration.file instanceof File) {
+    data.narration = { file: data.narration.file.name, blobUrl: data.narration.blobUrl };
+  } else if (data.narration && data.narration.file && typeof data.narration.file === 'object' && data.narration.file.name && !(data.narration.file instanceof File)) {
     data.narration = { file: data.narration.file.name, blobUrl: data.narration.blobUrl };
   } else if (data.narration && data.narration.file && typeof data.narration.file === 'string') {
-    // Si es string (ruta completa), extraer basename
     const basename = data.narration.file.split(/[\\/]/).pop();
     data.narration = { file: basename, blobUrl: data.narration.blobUrl };
   }
-  // Migrar music igual
+  // Migrate music equal
   if (data.music && typeof data.music === 'string') {
     data.music = { file: data.music };
-  } else if (data.music && data.music.file && typeof data.music.file === 'object' && data.music.file.name) {
+  } else if (data.music && data.music.file instanceof File) {
+    data.music = { file: data.music.file.name, blobUrl: data.music.blobUrl, volume: data.music.volume };
+  } else if (data.music && data.music.file && typeof data.music.file === 'object' && data.music.file.name && !(data.music.file instanceof File)) {
     data.music = { file: data.music.file.name, blobUrl: data.music.blobUrl, volume: data.music.volume };
   } else if (data.music && data.music.file && typeof data.music.file === 'string') {
     const basename = data.music.file.split(/[\\/]/).pop();

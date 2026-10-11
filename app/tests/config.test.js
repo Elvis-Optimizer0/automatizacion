@@ -190,4 +190,31 @@ describe('config.schema', () => {
       expect(result.images[1]).toEqual({ file: 'scene2.png', focus: { x: 0.5, y: 0.5 } });
     });
   });
+
+  describe('validateProject with File objects (simulated)', () => {
+    it('accepts File objects for images and extracts basename', () => {
+      const mockFile = new File(['test'], 'escena1.png', { type: 'image/png' });
+      const project = {
+        images: [mockFile, 'scene2.png'],
+        narration: { file: new File(['audio'], 'voz.mp3', { type: 'audio/mpeg' }) },
+        config: {}
+      };
+      const result = validateProject(project);
+      expect(result.images[0].file).toBe('escena1.png');
+      expect(result.images[1].file).toBe('scene2.png');
+      expect(result.narration.file).toBe('voz.mp3');
+    });
+
+    it('accepts File object for music', () => {
+      const project = {
+        images: ['scene1.png'],
+        narration: { file: 'voz.mp3' },
+        music: { file: new File(['audio'], 'musica.mp3', { type: 'audio/mpeg' }), volume: 0.5 },
+        config: {}
+      };
+      const result = validateProject(project);
+      expect(result.music.file).toBe('musica.mp3');
+      expect(result.music.volume).toBe(0.5);
+    });
+  });
 });
