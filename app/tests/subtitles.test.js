@@ -64,7 +64,7 @@ describe('subtitles', () => {
       
       const result = generateSubtitles(script, scenes, config);
       // ASS format has Fontsize as 3rd field in Style line
-      expect(result.assContent).toContain('Montserrat,64,');
+      expect(result.assContent).toContain('Montserrat-Bold,64,');
     });
 
     it('uses horizontal font size for 16:9', () => {
@@ -73,7 +73,7 @@ describe('subtitles', () => {
       const config = { resolution: '16:9', subtitleFontSizeHorizontal: 48, subtitleFontSizeVertical: 64 };
       
       const result = generateSubtitles(script, scenes, config);
-      expect(result.assContent).toContain('Montserrat,48,');
+      expect(result.assContent).toContain('Montserrat-Bold,48,');
     });
   });
 

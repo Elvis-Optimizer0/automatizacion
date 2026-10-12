@@ -2,6 +2,46 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
+// Resolve font path with asar support (same logic as fixAsarPath in binaries.js)
+function resolveFontPath(fontName) {
+  const candidatePaths = [
+    // Development paths
+    path.join(__dirname, '..', 'assets', 'fonts', fontName),
+    path.join(__dirname, '..', '..', 'assets', 'fonts', fontName),
+    path.join(process.cwd(), 'app', 'assets', 'fonts', fontName),
+    path.join(process.cwd(), 'assets', 'fonts', fontName),
+  ];
+
+  // Packaged (asar) paths - only add if resourcesPath exists
+  if (process.resourcesPath) {
+    candidatePaths.push(
+      path.join(process.resourcesPath, 'app', 'assets', 'fonts', fontName),
+      path.join(process.resourcesPath, 'app.asar.unpacked', 'app', 'assets', 'fonts', fontName)
+    );
+  }
+
+  for (const p of candidatePaths) {
+    if (fs.existsSync(p)) {
+      return p;
+    }
+  }
+  return null;
+}
+
+// Get font path with fallback to DejaVuSans-Bold.ttf
+function getSubtitleFontPath() {
+  // Try Montserrat Bold first
+  const montserratBold = resolveFontPath('Montserrat-Bold.ttf');
+  if (montserratBold) return montserratBold;
+  
+  // Fallback to DejaVuSans-Bold.ttf (always available)
+  const dejavuBold = resolveFontPath('DejaVuSans-Bold.ttf');
+  if (dejavuBold) return dejavuBold;
+  
+  // Last resort: empty string (will cause ASS to use system default)
+  return '';
+}
+
 function escapeAssText(text) {
   return text
     .replace(/\\/g, '\\\\')
@@ -148,6 +188,8 @@ function generateSubtitles(scriptText, scenes, config) {
   }
 
   // Generate ASS content
+  const fontPath = getSubtitleFontPath();
+  const fontName = fontPath ? path.basename(fontPath, '.ttf') : 'Montserrat';
   const assHeader = `[Script Info]
 Title: Video Maker Subtitles
 ScriptType: v4.00+
@@ -159,7 +201,7 @@ PlayResY: 1080
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Montserrat,${fontSize},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,0,2,2,10,10,10,1
+Style: Default,${fontName},${fontSize},&H00FFFFFF,&H000000FF,&H00000000,&H80000000,0,0,0,0,100,100,0,0,1,0,2,2,10,10,10,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
