@@ -181,4 +181,22 @@ describe('buildTimeline', () => {
     const timeline = buildTimeline(project, audioDuration);
     expect(timeline.scenes[0].duration).toBeCloseTo(15, 1);
   });
+
+  it('preserves path from input images in scenes', () => {
+    const project = {
+      ...baseProject,
+      images: [
+        { file: 'img1.png', path: 'C:/test/img1.png' },
+        { file: 'img2.png', path: 'C:/test/img2.png' },
+        { file: 'img3.png', path: 'C:/test/img3.png' }
+      ],
+      script: ''
+    };
+    const audioDuration = 15;
+    const timeline = buildTimeline(project, audioDuration);
+    expect(timeline.scenes).toHaveLength(3);
+    expect(timeline.scenes[0].path).toBe('C:/test/img1.png');
+    expect(timeline.scenes[1].path).toBe('C:/test/img2.png');
+    expect(timeline.scenes[2].path).toBe('C:/test/img3.png');
+  });
 });

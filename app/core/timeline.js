@@ -197,6 +197,7 @@ function buildTimeline(project, audioDuration) {
     scenes.push({
       index: i,
       file,
+      path: imageObj.path,
       start,
       end,
       duration: durations[i],

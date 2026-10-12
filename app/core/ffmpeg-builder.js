@@ -114,12 +114,16 @@ function buildContainFilter(W, H) {
   return `scale=${W}:${H}:force_original_aspect_ratio=decrease`;
 }
 
-function buildImageFilterChain(scene, W, H, fps, zoomEnabled, zoomConfig, fitMode) {
-  const { path, blobUrl, file, duration, zoomStyle, zoomIntensity, focus } = scene;
+function buildImageFilterChain(scene, W, H, fps, zoomEnabled, zoomConfig, fitMode, fallbackPath) {
+  const { path: scenePath, blobUrl, file, duration, zoomStyle, zoomIntensity, focus } = scene;
   const isVideo = file.toLowerCase().endsWith('.mp4');
-  const inputPath = scene.path;
-  if (!inputPath || !path.isAbsolute(inputPath)) {
-    throw new Error(`E_INPUT_MISSING: Imagen "${file}" sin ruta absoluta válida`);
+  let inputPath = scenePath;
+  if (!inputPath || !require('path').isAbsolute(inputPath)) {
+    if (fallbackPath && require('path').isAbsolute(fallbackPath)) {
+      inputPath = fallbackPath;
+    } else {
+      throw new Error(`E_INPUT_MISSING: Imagen "${file}" sin ruta absoluta válida`);
+    }
   }
 
   if (isVideo) {
@@ -242,12 +246,13 @@ function buildFilterComplex(project, timeline, fontPath) {
   const { config } = project;
   const { scenes, totalDuration } = timeline;
   const fps = config.fps;
+  const images = project.images || [];
 
   let filter = '';
 
   for (let i = 0; i < scenes.length; i++) {
     const scene = scenes[i];
-    filter += buildImageFilterChain(scene, config.outputs[0].w, config.outputs[0].h, fps, config.zoom.enabled, config.zoom, config.fitMode) + ';';
+    filter += buildImageFilterChain(scene, config.outputs[0].w, config.outputs[0].h, fps, config.zoom.enabled, config.zoom, config.fitMode, images[i]?.path) + ';';
   }
 
   filter += buildTransitionChain(scenes, config.transition.duration, config.outputs[0].w, config.outputs[0].h);
@@ -295,9 +300,14 @@ function buildFfmpegArgs(project, timeline, fontPath, outputPath, outputConfig) 
 
   for (let i = 0; i < scenes.length; i++) {
     const scene = scenes[i];
-    const inputPath = scene.path;
+    let inputPath = scene.path;
     if (!inputPath || !path.isAbsolute(inputPath)) {
-      throw new Error(`E_INPUT_MISSING: Imagen "${scene.file}" sin ruta absoluta válida`);
+      const fallback = project.images?.[i]?.path;
+      if (fallback && path.isAbsolute(fallback)) {
+        inputPath = fallback;
+      } else {
+        throw new Error(`E_INPUT_MISSING: Imagen ${i} ("${scene.file}") sin ruta absoluta válida: ${scene.path ?? 'undefined'}`);
+      }
     }
     if (scene.isVideo) {
       inputs.push('-stream_loop', '-1', '-i', inputPath);
@@ -359,10 +369,11 @@ function buildFilterComplexForOutput(project, timeline, fontPath, outputConfig) 
   const { w: W, h: H } = outputConfig;
 
   let filter = '';
+  const images = project.images || [];
 
   for (let i = 0; i < scenes.length; i++) {
     const scene = scenes[i];
-    filter += buildImageFilterChain(scene, W, H, fps, config.zoom.enabled, config.zoom, config.fitMode) + ';';
+    filter += buildImageFilterChain(scene, W, H, fps, config.zoom.enabled, config.zoom, config.fitMode, images[i]?.path) + ';';
   }
 
   filter += buildTransitionChain(scenes, config.transition.duration, W, H);
