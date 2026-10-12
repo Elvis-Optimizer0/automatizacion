@@ -5,7 +5,7 @@ describe('config.schema', () => {
   describe('getDefaultConfig', () => {
     it('returns correct defaults', () => {
       const config = getDefaultConfig();
-      expect(config.outputs).toEqual(['16:9', '9:16', '1:1']);
+      expect(config.outputs).toEqual(['16:9']);
       expect(config.resolution).toBe('16:9');
       expect(config.fps).toBe(30);
       expect(config.imageFit).toBe('cover');
@@ -41,7 +41,7 @@ describe('validateProject', () => {
 
     it('applies default config', () => {
       const result = validateProject(validProject);
-      expect(result.config.outputs).toEqual(['16:9', '9:16', '1:1']);
+      expect(result.config.outputs).toEqual(['16:9']);
       expect(result.config.resolution).toBe('16:9');
       expect(result.config.fps).toBe(30);
     });

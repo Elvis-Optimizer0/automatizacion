@@ -109,7 +109,7 @@ const ProjectSchema = z.object({
 });
 
 const DEFAULT_CONFIG = {
-  outputs: ['16:9', '9:16', '1:1'],
+  outputs: ['16:9'],
   resolution: '16:9',
   fitMode: 'crop',
   fps: 30,
@@ -149,7 +149,7 @@ function isAbsolutePath(p) {
 function migrateProject(data) {
   // Default to horizontal 16:9 if no outputs specified
   if (data.config && !data.config.outputs && !data.config.resolution) {
-    data.config.outputs = ['16:9', '9:16', '1:1'];
+    data.config.outputs = ['16:9'];
     data.config.resolution = '16:9';
   }
   if (data.config && data.config.resolution && !data.config.outputs) {
