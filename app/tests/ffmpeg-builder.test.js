@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildZoomFilter, getResolutionWH, escapeFontPath } from '../core/ffmpeg-builder.js';
+import { buildZoomFilter, getResolutionWH, escapeFontPath, buildCropFilter, buildImageFilterChainByIndex } from '../core/ffmpeg-builder.js';
 
 describe('ffmpeg-builder', () => {
   describe('getResolutionWH', () => {
@@ -98,5 +98,65 @@ describe('ffmpeg-builder', () => {
       const filter = buildZoomFilter('unknown', 1.22, 0.10, 4, 30, 1080, 1920);
       expect(filter).toContain("zoompan=z='1'");
     });
+  });
+});
+
+describe('fitMode bars (letterbox)', () => {
+  it('buildCropFilter returns empty for bars mode', () => {
+    const scene = { focus: { x: 0.5, y: 0.5 } };
+    const result = buildCropFilter(scene, 1080, 1350, 'bars');
+    expect(result).toBe('');
+  });
+
+  it('buildImageFilterChainByIndex with bars mode uses contain and pad', () => {
+    const scene = { 
+      file: 'test.jpg', 
+      duration: 4, 
+      zoomStyle: 'none', 
+      zoomIntensity: 'normal', 
+      focus: { x: 0.5, y: 0.5 } 
+    };
+    const filter = buildImageFilterChainByIndex(scene, 0, 1080, 1350, 30, false, {}, 'bars');
+    expect(filter).toContain('force_original_aspect_ratio=decrease');
+    expect(filter).toContain('pad=1080:1350');
+    expect(filter).toContain('color=black');
+  });
+
+  it('buildImageFilterChainByIndex with bars mode and zoom applies zoom before pad', () => {
+    const scene = { 
+      file: 'test.jpg', 
+      duration: 4, 
+      zoomStyle: 'kenburns', 
+      zoomIntensity: 'normal', 
+      focus: { x: 0.5, y: 0.5 } 
+    };
+    const filter = buildImageFilterChainByIndex(scene, 0, 1080, 1350, 30, true, { initialScale: 1.22, intensity: 0.10 }, 'bars');
+    expect(filter).toContain('force_original_aspect_ratio=decrease');
+    expect(filter).toContain('zoompan=');
+    expect(filter).toContain('pad=1080:1350');
+    expect(filter).toContain('color=black');
+  });
+});
+
+describe('focus point in crop filter', () => {
+  it('buildCropFilter uses focus x,y for crop position', () => {
+    const scene = { focus: { x: 0.2, y: 0.8 } };
+    const result = buildCropFilter(scene, 1080, 1920, 'crop');
+    expect(result).toContain('0.2*iw');
+    expect(result).toContain('0.8*ih');
+  });
+
+  it('buildCropFilter defaults to center when no focus', () => {
+    const scene = { focus: { x: 0.5, y: 0.5 } };
+    const result = buildCropFilter(scene, 1080, 1920, 'crop');
+    expect(result).toContain('0.5*iw');
+    expect(result).toContain('0.5*ih');
+  });
+
+  it('buildCropFilter handles missing focus', () => {
+    const scene = {};
+    const result = buildCropFilter(scene, 1080, 1920, 'crop');
+    expect(result).toContain('0.5*iw');
+    expect(result).toContain('0.5*ih');
   });
 });

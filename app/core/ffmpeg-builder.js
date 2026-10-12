@@ -95,7 +95,7 @@ function buildCropFilter(scene, W, H, fitMode) {
   const fx = focus?.x ?? 0.5;
   const fy = focus?.y ?? 0.5;
 
-  if (fitMode === 'blur') {
+  if (fitMode === 'blur' || fitMode === 'bars') {
     return '';
   }
 
@@ -257,6 +257,17 @@ function buildImageFilterChainByIndex(scene, inputIdx, W, H, fps, zoomEnabled, z
     }
     const zoomFilter = buildZoomFilter(zoomStyle, zoomConfig.initialScale, zoomConfig.intensity, duration, fps, W, H, zoomIntensity);
     return `${idx}${blurBg}[bg${scene.index}];${idx}${containFg},${zoomFilter},format=yuv420p,setsar=1[fg${scene.index}];[bg${scene.index}][fg${scene.index}]overlay=(W-w)/2:(H-h)/2,trim=duration=${duration}[v${scene.index}]`;
+  }
+
+  if (fitMode === 'bars') {
+    // Letterbox: scale to fit (contain) and pad with black bars
+    const containFilter = `scale=${W}:${H}:force_original_aspect_ratio=decrease`;
+    if (!zoomEnabled || zoomStyle === 'none') {
+      return `${idx}${containFilter},pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p,setsar=1,trim=duration=${duration}[v${scene.index}]`;
+    }
+    // For zoom with bars mode, we need to apply zoom on the contained image
+    const zoomFilter = buildZoomFilter(zoomStyle, zoomConfig.initialScale, zoomConfig.intensity, duration, fps, W, H, zoomIntensity);
+    return `${idx}scale=${W}:${H}:force_original_aspect_ratio=decrease,${zoomFilter},pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p,setsar=1,trim=duration=${duration}[v${scene.index}]`;
   }
 
   const cropFilter = buildCropFilter(scene, W, H, fitMode);
