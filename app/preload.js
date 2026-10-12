@@ -13,7 +13,14 @@ contextBridge.exposeInMainWorld('api', {
   getDefaultConfig: () => ipcRenderer.invoke('getDefaultConfig'),
   getFontPath: () => ipcRenderer.invoke('getFontPath'),
   getLastOutputDir: () => ipcRenderer.invoke('getLastOutputDir'),
-  getRealPath: (file) => webUtils.getPathForFile(file),
+  getRealPath: (file) => {
+    try {
+      return webUtils.getPathForFile(file) || '';
+    } catch {
+      return '';
+    }
+  },
+  stageFile: (name, buffer) => ipcRenderer.invoke('stage-file', { name, buffer }),
   onRenderProgress: (callback) => {
     const handler = (_event, data) => callback(data);
     ipcRenderer.on('render-progress', handler);

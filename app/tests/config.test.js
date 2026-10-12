@@ -26,8 +26,8 @@ describe('config.schema', () => {
 
   describe('validateProject', () => {
     const validProject = {
-      images: ['scene1.png', 'scene2.png'],
-      narration: { file: 'voz.mp3' },
+      images: [{ file: 'scene1.png', path: 'C:/fake/path/scene1.png' }, { file: 'scene2.png', path: 'C:/fake/path/scene2.png' }],
+      narration: { file: 'voz.mp3', path: 'C:/fake/path/voz.mp3' },
       config: {}
     };
 
@@ -49,26 +49,26 @@ describe('config.schema', () => {
     });
 
     it('rejects invalid image extensions', () => {
-      expect(() => validateProject({ ...validProject, images: ['scene1.gif'] })).toThrow();
+      expect(() => validateProject({ ...validProject, images: [{ file: 'scene1.gif', path: 'C:/fake/path/scene1.gif' }] })).toThrow();
     });
 
     it('accepts valid image extensions', () => {
       const exts = ['png', 'jpg', 'jpeg', 'webp', 'mp4'];
       exts.forEach(ext => {
-        const result = validateProject({ ...validProject, images: [`scene.${ext}`] });
+        const result = validateProject({ ...validProject, images: [{ file: `scene.${ext}`, path: `C:/fake/path/scene.${ext}` }] });
         expect(result.images[0].file).toBe(`scene.${ext}`);
         expect(result.images[0].focus).toEqual({ x: 0.5, y: 0.5 });
       });
     });
 
     it('rejects invalid narration extension', () => {
-      expect(() => validateProject({ ...validProject, narration: { file: 'voz.txt' } })).toThrow();
+      expect(() => validateProject({ ...validProject, narration: { file: 'voz.txt', path: 'C:/fake/path/voz.txt' } })).toThrow();
     });
 
     it('accepts valid narration extensions', () => {
       const exts = ['mp3', 'wav', 'm4a', 'aac'];
       exts.forEach(ext => {
-        const result = validateProject({ ...validProject, narration: { file: `voz.${ext}` } });
+        const result = validateProject({ ...validProject, narration: { file: `voz.${ext}`, path: `C:/fake/path/voz.${ext}` } });
         expect(result.narration.file).toBe(`voz.${ext}`);
       });
     });
@@ -76,7 +76,7 @@ describe('config.schema', () => {
     it('accepts optional music', () => {
       const result = validateProject({
         ...validProject,
-        music: { file: 'musica.mp3', volume: 0.2 }
+        music: { file: 'musica.mp3', path: 'C:/fake/path/musica.mp3', volume: 0.2 }
       });
       expect(result.music.volume).toBe(0.2);
     });
@@ -84,7 +84,7 @@ describe('config.schema', () => {
     it('defaults music volume to 0.12', () => {
       const result = validateProject({
         ...validProject,
-        music: { file: 'musica.mp3' }
+        music: { file: 'musica.mp3', path: 'C:/fake/path/musica.mp3' }
       });
       expect(result.music.volume).toBe(0.12);
     });
@@ -121,7 +121,7 @@ describe('config.schema', () => {
       const result = validateProject({
         ...validProject,
         config: {
-          badges: [{ file: 'badge.png', at: 2, duration: 3, sizePercent: 20, position: 'top-right', animation: 'pop' }]
+          badges: [{ file: 'badge.png', path: 'C:/fake/path/badge.png', at: 2, duration: 3, sizePercent: 20, position: 'top-right', animation: 'pop' }]
         }
       });
       expect(result.config.badges).toHaveLength(1);
@@ -130,7 +130,7 @@ describe('config.schema', () => {
     it('rejects invalid badge position', () => {
       expect(() => validateProject({
         ...validProject,
-        config: { badges: [{ file: 'b.png', at: 0, duration: 1, sizePercent: 10, position: 'invalid', animation: 'pop' }] }
+        config: { badges: [{ file: 'b.png', path: 'C:/fake/path/b.png', at: 0, duration: 1, sizePercent: 10, position: 'invalid', animation: 'pop' }] }
       })).toThrow();
     });
 
@@ -184,10 +184,10 @@ describe('config.schema', () => {
     it('accepts images with focus point', () => {
       const result = validateProject({
         ...validProject,
-        images: [{ file: 'scene1.png', focus: { x: 0.3, y: 0.7 }, path: 'scene1.png' }, { file: 'scene2.png', path: 'scene2.png' }]
+        images: [{ file: 'scene1.png', path: 'C:/fake/path/scene1.png', focus: { x: 0.3, y: 0.7 } }, { file: 'scene2.png', path: 'C:/fake/path/scene2.png' }]
       });
-      expect(result.images[0]).toEqual({ file: 'scene1.png', focus: { x: 0.3, y: 0.7 }, path: 'scene1.png', blobUrl: undefined });
-      expect(result.images[1]).toEqual({ file: 'scene2.png', focus: { x: 0.5, y: 0.5 }, path: 'scene2.png', blobUrl: undefined });
+      expect(result.images[0]).toEqual({ file: 'scene1.png', focus: { x: 0.3, y: 0.7 }, path: 'C:/fake/path/scene1.png', blobUrl: undefined });
+      expect(result.images[1]).toEqual({ file: 'scene2.png', focus: { x: 0.5, y: 0.5 }, path: 'C:/fake/path/scene2.png', blobUrl: undefined });
     });
   });
 
@@ -196,7 +196,7 @@ describe('config.schema', () => {
       const mockFile = new File(['test'], 'escena1.png', { type: 'image/png' });
       Object.defineProperty(mockFile, 'path', { value: 'C:/fake/path/escena1.png', writable: true });
       const project = {
-        images: [mockFile, { file: 'scene2.png', path: 'scene2.png' }],
+        images: [mockFile, { file: 'scene2.png', path: 'C:/fake/path/scene2.png' }],
         narration: { file: new File(['audio'], 'voz.mp3', { type: 'audio/mpeg' }) },
         config: {}
       };
@@ -212,8 +212,8 @@ describe('config.schema', () => {
       const mockMusicFile = new File(['audio'], 'musica.mp3', { type: 'audio/mpeg' });
       Object.defineProperty(mockMusicFile, 'path', { value: 'C:/fake/path/musica.mp3', writable: true });
       const project = {
-        images: [{ file: 'scene1.png', path: 'scene1.png' }],
-        narration: { file: 'voz.mp3', path: 'voz.mp3' },
+        images: [{ file: 'scene1.png', path: 'C:/fake/path/scene1.png' }],
+        narration: { file: 'voz.mp3', path: 'C:/fake/path/voz.mp3' },
         music: { file: mockMusicFile, volume: 0.5 },
         config: {}
       };

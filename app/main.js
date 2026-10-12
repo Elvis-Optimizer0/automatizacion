@@ -97,16 +97,11 @@ ipcMain.handle('openFolder', async (event, folderPath) => {
 
 ipcMain.handle('buildTimeline', async (event, project) => {
   try {
-    // DEBUG: Log exact values before validation
-    const img0file = project.images?.[0]?.file;
-    const img0blob = project.images?.[0]?.blobUrl;
-    const narFile = project.narration?.file;
-    console.log('[DEBUG buildTimeline] images[0].file =', JSON.stringify(img0file));
-    console.log('[DEBUG buildTimeline] images[0].blobUrl =', JSON.stringify(img0blob));
-    console.log('[DEBUG buildTimeline] narration.file =', JSON.stringify(narFile));
-    
     const validated = validateProject(project);
-    const narrationPath = validated.narration?.realPath || validated.narration?.blobUrl || validated.narration?.file;
+    const narrationPath = validated.narration?.path;
+    if (!narrationPath || !path.isAbsolute(narrationPath)) {
+      throw new Error(`E_INPUT_MISSING: Narración sin ruta absoluta válida`);
+    }
     const audioDuration = await getAudioDuration(narrationPath);
     const timeline = buildTimeline(validated, audioDuration);
 
@@ -116,12 +111,7 @@ ipcMain.handle('buildTimeline', async (event, project) => {
 
     return { success: true, timeline };
   } catch (err) {
-    // Include debug values in error for UI
-    const img0file = project.images?.[0]?.file;
-    const img0blob = project.images?.[0]?.blobUrl;
-    const narFile = project.narration?.file;
-    const debugInfo = `\nDEBUG: images[0].file="${img0file}" | images[0].blobUrl="${project.images?.[0]?.blobUrl}" | narration.file="${narFile}"`;
-    return { success: false, error: err.message + debugInfo };
+    return { success: false, error: err.message };
   }
 });
 
@@ -185,4 +175,22 @@ ipcMain.handle('getFontPath', () => {
 
 ipcMain.handle('getLastOutputDir', () => {
   return lastOutputDir;
+});
+
+ipcMain.handle('stage-file', async (event, { name, buffer }) => {
+  const fs = require('fs');
+  const path = require('path');
+  const { app } = require('electron');
+  
+  const safeName = name.replace(/[<>:"\/\\|?*]/g, '_');
+  const tempDir = path.join(app.getPath('temp'), 'video-maker-inputs');
+  
+  try {
+    await fs.promises.mkdir(tempDir, { recursive: true });
+  } catch (e) {}
+  
+  const filePath = path.join(tempDir, `${Date.now()}_${safeName}`);
+  await fs.promises.writeFile(filePath, Buffer.from(buffer));
+  
+  return filePath;
 });

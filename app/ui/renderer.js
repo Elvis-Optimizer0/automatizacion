@@ -36,6 +36,39 @@ function debounce(fn, ms) {
   };
 }
 
+async function makeEntry(file) {
+  const path = await window.api.getRealPath(file);
+  if (path && path.length > 0) {
+    return {
+      name: file.name,
+      path,
+      blobUrl: URL.createObjectURL(file),
+      size: file.size,
+      type: file.type || (file.name.toLowerCase().endsWith('.mp4') ? 'video' : 'image')
+    };
+  }
+  
+  // Fallback: copiar a temp via stage-file
+  const buffer = await file.arrayBuffer();
+  const stagedPath = await window.api.stageFile(file.name, buffer);
+  if (!stagedPath) {
+    throw new Error(`No se pudo obtener ruta para ${file.name}`);
+  }
+  
+  // Validar que la ruta staged sea absoluta
+  if (!stagedPath || !stagedPath.startsWith('/') && !/^[a-zA-Z]:[\\/]/.test(stagedPath)) {
+    throw new Error(`stage-file devolvió ruta no absoluta: ${stagedPath}`);
+  }
+  
+  return {
+    name: file.name,
+    path: stagedPath,
+    blobUrl: URL.createObjectURL(file),
+    size: file.size,
+    type: file.type || (file.name.toLowerCase().endsWith('.mp4') ? 'video' : 'image')
+  };
+}
+
 let state = {
   images: [],
   narration: null,
@@ -193,14 +226,12 @@ function setupImages() {
     }
     const newImages = [];
     for (const f of validFiles) {
-      const path = await window.api.getRealPath(f);
-      newImages.push({
-        name: f.name,
-        path,
-        blobUrl: URL.createObjectURL(f),
-        size: f.size,
-        type: f.name.toLowerCase().endsWith('.mp4') ? 'video' : 'image'
-      });
+      try {
+        const entry = await makeEntry(f);
+        newImages.push(entry);
+      } catch (e) {
+        showToast(`Error al procesar ${f.name}: ${e.message}`);
+      }
     }
     state.images = [...state.images, ...newImages];
     updateImagesUI();
@@ -221,10 +252,14 @@ function setupAudio() {
       showToast('Formato de audio no válido');
       return;
     }
-    const path = await window.api.getRealPath(file);
-    state.narration = { name: file.name, path, blobUrl: URL.createObjectURL(file), size: file.size };
-    updateNarrationUI();
-    updateTimelineButton();
+    try {
+      const entry = await makeEntry(file);
+      state.narration = { name: entry.name, path: entry.path, blobUrl: entry.blobUrl, size: entry.size };
+      updateNarrationUI();
+      updateTimelineButton();
+    } catch (e) {
+      showToast(`Error al procesar narración: ${e.message}`);
+    }
   });
 
   setupDropZone('music-dropzone', 'music-input', async files => {
@@ -233,9 +268,13 @@ function setupAudio() {
       showToast('Formato de audio no válido');
       return;
     }
-    const path = await window.api.getRealPath(file);
-    state.music = { name: file.name, path, blobUrl: URL.createObjectURL(file), size: file.size, volume: 0.12 };
-    updateMusicUI();
+    try {
+      const entry = await makeEntry(file);
+      state.music = { name: entry.name, path: entry.path, blobUrl: entry.blobUrl, size: entry.size, volume: 0.12 };
+      updateMusicUI();
+    } catch (e) {
+      showToast(`Error al procesar música: ${e.message}`);
+    }
   });
 
   $('#clear-narration').addEventListener('click', e => {
@@ -796,18 +835,15 @@ function buildProject() {
     images: state.images.map(img => ({
       file: img.name,
       path: img.path,
-      blobUrl: img.blobUrl,
       focus: img.focus || { x: 0.5, y: 0.5 }
     })),
     narration: state.narration ? {
       file: state.narration.name,
-      path: state.narration.path,
-      blobUrl: state.narration.blobUrl
+      path: state.narration.path
     } : undefined,
     music: state.music ? {
       file: state.music.name,
       path: state.music.path,
-      blobUrl: state.music.blobUrl,
       volume: state.music.volume
     } : undefined,
     script: state.script,

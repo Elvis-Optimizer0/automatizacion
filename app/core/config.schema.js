@@ -40,7 +40,10 @@ const NarrationSchema = z.object({
     const basename = val.split(/[\\/]/).pop() || val;
     return /\.(mp3|wav|m4a|aac)$/i.test(basename);
   }, { message: 'El archivo de narración debe ser mp3, wav, m4a o aac' }),
-  path: z.string().min(1, 'La ruta del archivo de narración es requerida'),
+  path: z.string().min(1, 'La ruta del archivo de narración es requerida').refine((val) => {
+    // Windows absolute: C:\... or \\server\share or /path
+    return /^([a-zA-Z]:[\\/]|\\\\)/.test(val);
+  }, { message: 'La ruta debe ser absoluta (ej: C:\\path o \\\\server\share)' }),
   blobUrl: z.string().optional()
 }).optional();
 
@@ -49,7 +52,9 @@ const MusicSchema = z.object({
     const basename = val.split(/[\\/]/).pop() || val;
     return /\.(mp3|wav|m4a|aac)$/i.test(basename);
   }, { message: 'El archivo de música debe ser mp3, wav, m4a o aac' }),
-  path: z.string().min(1, 'La ruta del archivo de música es requerida'),
+  path: z.string().min(1, 'La ruta del archivo de música es requerida').refine((val) => {
+    return /^([a-zA-Z]:[\\/]|\\\\)/.test(val);
+  }, { message: 'La ruta debe ser absoluta (ej: C:\\path o \\\\server\share)' }),
   blobUrl: z.string().optional(),
   volume: z.number().min(0).max(1).default(0.12)
 }).optional();
@@ -65,7 +70,9 @@ const ImageWithFocusSchema = z.object({
     return /\.(png|jpg|jpeg|webp|mp4)$/i.test(basename);
   }, { message: 'El archivo debe tener una extensión válida: png, jpg, jpeg, webp o mp4' }),
   focus: FocusPointSchema.optional(),
-  path: z.string().min(1, 'La ruta del archivo es requerida'),
+  path: z.string().min(1, 'La ruta del archivo es requerida').refine((val) => {
+    return /^([a-zA-Z]:[\\/]|\\\\)/.test(val);
+  }, { message: 'La ruta debe ser absoluta (ej: C:\\path o \\\\server\share)' }),
   blobUrl: z.string().optional()
 });
 
@@ -166,7 +173,7 @@ function migrateProject(data) {
   if (data.narration && typeof data.narration === 'string') {
     data.narration = { file: data.narration, path: data.narration };
   } else if (data.narration && data.narration.file instanceof File) {
-    data.narration = { file: data.narration.file.name, path: data.narration.path || data.narration.file.name, blobUrl: data.narration.blobUrl };
+    data.narration = { file: data.narration.file.name, path: data.narration.path || data.narration.file.path || data.narration.file.name, blobUrl: data.narration.blobUrl };
   } else if (data.narration && data.narration.file && typeof data.narration.file === 'object' && data.narration.file.name && !(data.narration.file instanceof File)) {
     data.narration = { file: data.narration.file.name, path: data.narration.path || '', blobUrl: data.narration.blobUrl };
   } else if (data.narration && data.narration.file && typeof data.narration.file === 'string') {

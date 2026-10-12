@@ -151,7 +151,52 @@ function renderPreview(project, timeline, fontPath, outputPath, onProgress) {
   });
 }
 
+function validateInputPaths(project) {
+  const fs = require('fs');
+  const path = require('path');
+  
+  const inputs = [];
+  
+  // Imágenes
+  for (let i = 0; i < project.images.length; i++) {
+    const img = project.images[i];
+    if (!img.path || !path.isAbsolute(img.path) || !require('fs').existsSync(img.path)) {
+      throw new Error(`E_INPUT_MISSING: Imagen ${i} ("${img.file}") sin ruta absoluta válida: ${img.path}`);
+    }
+    inputs.push({ type: 'imagen', file: img.file, path: img.path });
+  }
+  
+  // Narración
+  if (!project.narration?.path || !path.isAbsolute(project.narration.path) || !require('fs').existsSync(project.narration.path)) {
+    throw new Error(`E_INPUT_MISSING: Narración sin ruta absoluta válida: ${project.narration?.path}`);
+  }
+  inputs.push({ type: 'narración', file: project.narration.file, path: project.narration.path });
+  
+  // Música
+  if (project.music && project.music.path) {
+    if (!path.isAbsolute(project.music.path) || !require('fs').existsSync(project.music.path)) {
+      throw new Error(`E_INPUT_MISSING: Música "${project.music.file}" sin ruta absoluta válida: ${project.music.path}`);
+    }
+    inputs.push({ type: 'música', file: project.music.file, path: project.music.path });
+  }
+  
+  // Badges
+  if (Array.isArray(project.config?.badges)) {
+    for (let i = 0; i < project.config.badges.length; i++) {
+      const badge = project.config.badges[i];
+      if (badge.path && (!path.isAbsolute(badge.path) || !require('fs').existsSync(badge.path))) {
+        throw new Error(`E_INPUT_MISSING: Badge ${i} ("${badge.file}") sin ruta absoluta válida: ${badge.path}`);
+      }
+    }
+  }
+  
+  console.log('[renderAllOutputs] inputs validados:', JSON.stringify(inputs, null, 2));
+}
+
 async function renderAllOutputs(project, timeline, fontPath, outputDir, onProgress) {
+  // Validar rutas antes de lanzar ffmpeg
+  validateInputPaths(project);
+  
   const outputConfigs = buildOutputConfigs(project.config);
   console.log('[renderAllOutputs] project.config.outputs:', JSON.stringify(project.config.outputs));
   console.log('[renderAllOutputs] outputConfigs:', JSON.stringify(outputConfigs));
