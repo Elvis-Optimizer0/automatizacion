@@ -37,14 +37,14 @@ function parseScenes(scriptText) {
   const normalized = scriptText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   const fullText = normalized;
 
-  // Find all scene markers with their positions
+  // Find all scene markers with their positions in the original text
   const sceneMarkers = [];
   let markerMatch;
   while ((markerMatch = SCENE_MARKER_REGEX.exec(fullText)) !== null) {
-    // markerMatch[1] is from first group (brackets/parens), markerMatch[2] from second group ("de" keyword)
     const sceneNumber = parseInt(markerMatch[1] || markerMatch[2], 10);
+    const markerStart = markerMatch.index;
     const markerEnd = markerMatch.index + markerMatch[0].length;
-    sceneMarkers.push({ number: sceneNumber, markerEnd });
+    sceneMarkers.push({ number: sceneNumber, markerStart, markerEnd });
   }
 
   if (sceneMarkers.length === 0) {
@@ -52,8 +52,8 @@ function parseScenes(scriptText) {
     return [];
   }
 
-  // Sort by scene number
-  sceneMarkers.sort((a, b) => a.number - b.number);
+  // Sort markers by position in text to extract text correctly
+  sceneMarkers.sort((a, b) => a.markerStart - b.markerStart);
 
   // Check for duplicate scene numbers
   const seenNumbers = new Set();
@@ -70,36 +70,49 @@ function parseScenes(scriptText) {
     const marker = sceneMarkers[i];
     const nextMarker = sceneMarkers[i + 1];
 
-    // Extract text between this marker and the next
+    // Extract text between this marker and the next (by position in text)
     const textStart = marker.markerEnd;
-    const textEnd = nextMarker ? nextMarker.markerEnd : fullText.length;
-    const text = fullText.slice(textStart, textEnd).trim();
+    const textEnd = nextMarker ? nextMarker.markerStart : fullText.length;
+    let text = fullText.slice(textStart, textEnd).trim();
 
     // Find time range in the text (e.g., "0:00 - 0:30", "0:00 a 0:30")
     let start = null;
     let end = null;
 
-    // Check for explicit range patterns like "0:00 - 0:30" or "0:00 a 0:30"
-    const rangeMatch = text.match(/(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?)\s*[-–—aA]\s*(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?)/);
-    if (rangeMatch) {
-      start = parseTimeToSeconds(rangeMatch[1]);
-      end = parseTimeToSeconds(rangeMatch[2]);
+    // FIRST: Check for timestamps in brackets like (0:30 - 1:05) or (0:00 a 0:30)
+    const bracketRangeMatch = text.match(/\((\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?)\s*[-–—aA]\s*(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?)\)/);
+    if (bracketRangeMatch) {
+      start = parseTimeToSeconds(bracketRangeMatch[1]);
+      end = parseTimeToSeconds(bracketRangeMatch[2]);
       hasValidTimeRange = true;
+      // Remove the bracketed time range from text
+      text = text.replace(bracketRangeMatch[0], '').trim();
     } else {
-      // Also check for timestamps in brackets like (0:30 - 1:05)
-      const bracketRangeMatch = text.match(/\((\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?)\s*[-–—]\s*(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?)\)/);
-      if (bracketRangeMatch) {
-        start = parseTimeToSeconds(bracketRangeMatch[1]);
-        end = parseTimeToSeconds(bracketRangeMatch[2]);
+      // Check for "de" keyword format: "Escena 1 de 0:00 a 0:30"
+      const deMatch = text.match(/de\s+(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?)\s*a\s+(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?)/i);
+      if (deMatch) {
+        start = parseTimeToSeconds(deMatch[1]);
+        end = parseTimeToSeconds(deMatch[2]);
         hasValidTimeRange = true;
+        text = text.replace(deMatch[0], '').trim();
       } else {
-        // Look for individual timestamps as fallback
-        const timeMatches = [...text.matchAll(TIMESTAMP_ONLY_REGEX)];
-        if (timeMatches.length >= 1) {
-          start = parseTimeToSeconds(timeMatches[0][1]);
-        }
-        if (timeMatches.length >= 2) {
-          end = parseTimeToSeconds(timeMatches[1][1]);
+        // Check for explicit range patterns like "0:00 - 0:30" or "0:00 a 0:30"
+        const rangeMatch = text.match(/(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?)\s*[-–—aA]\s*(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d+)?)/);
+        if (rangeMatch) {
+          start = parseTimeToSeconds(rangeMatch[1]);
+          end = parseTimeToSeconds(rangeMatch[2]);
+          hasValidTimeRange = true;
+          // Remove the time range from text
+          text = text.replace(rangeMatch[0], '').trim();
+        } else {
+          // Look for individual timestamps as fallback
+          const timeMatches = [...text.matchAll(TIMESTAMP_ONLY_REGEX)];
+          if (timeMatches.length >= 1) {
+            start = parseTimeToSeconds(timeMatches[0][1]);
+          }
+          if (timeMatches.length >= 2) {
+            end = parseTimeToSeconds(timeMatches[1][1]);
+          }
         }
       }
     }
@@ -108,7 +121,8 @@ function parseScenes(scriptText) {
       number: marker.number,
       start,
       end,
-      text
+      // Clean up text: remove leading/trailing brackets, parentheses, colons
+      text: text.replace(/^[\s\)\]\:]+/, '').replace(/[\s\(\[\:]+$/, '').trim()
     });
   }
 
@@ -117,15 +131,15 @@ function parseScenes(scriptText) {
     return [];
   }
 
-  // Validate: check for overlapping or gap ranges
+  // Sort scenes by scene number for output
+  scenes.sort((a, b) => a.number - b.number);
+
+  // Validate: check for overlapping ranges (only when both times are explicitly defined)
+  // Gap validation removed - gaps are allowed, UI will show warning
   for (let i = 0; i < scenes.length - 1; i++) {
     if (scenes[i].end !== null && scenes[i + 1].start !== null) {
       if (scenes[i].end > scenes[i + 1].start) {
         throw new Error(`E_SCENE_OVERLAP: Escena ${scenes[i].number} y ${scenes[i + 1].number} se solapan`);
-      }
-      if (scenes[i].end < scenes[i + 1].start - 1) {
-        // Gap > 1 second
-        throw new Error(`E_SCENE_GAP: Hueco entre escena ${scenes[i].number} y ${scenes[i + 1].number}`);
       }
     }
   }
