@@ -1,4 +1,5 @@
 const path = require('path');
+const { generateSubtitles, writeAssFile, escapeAssPath } = require('./subtitles');
 
 function getResolutionWH(resolution) {
   switch (resolution) {
@@ -180,7 +181,7 @@ function buildInputSpecs(project, timeline) {
 }
 
 // Build filter graph using input indices (not paths)
-function buildFilterGraph(inputMeta, scenes, config, fontPath, W, H, totalDuration, narrationInputIdx, musicInputIdx, badgeInputIndices) {
+function buildFilterGraph(inputMeta, scenes, config, fontPath, W, H, totalDuration, narrationInputIdx, musicInputIdx, badgeInputIndices, scriptText) {
   const fps = config.fps;
   const images = scenes.map(s => s); // scenes already have path info
   let filter = '';
@@ -230,6 +231,21 @@ function buildFilterGraph(inputMeta, scenes, config, fontPath, W, H, totalDurati
   if (progressFilter) {
     filter += `[${currentLabel}]${progressFilter}[vprogress];`;
     currentLabel = 'vprogress';
+  }
+
+  // Subtitles filter (last in chain)
+  if (config.subtitles && config.subtitles.enabled && scriptText && scriptText.trim()) {
+    try {
+      const { assContent } = generateSubtitles(scriptText, scenes, config);
+      if (assContent) {
+        const assPath = writeAssFile(assContent);
+        const escapedPath = escapeAssPath(assPath);
+        filter += `[${currentLabel}]subtitles='${escapedPath}':force_style='FontName=Montserrat,FontSize=${config.subtitles.fontSize || 48},Outline=0,Shadow=2,Alignment=2,MarginV=20'[vsubs];`;
+        currentLabel = 'vsubs';
+      }
+    } catch (e) {
+      throw new Error(`E_SUBTITLES_FAILED: Error generando subtítulos: ${e.message}`);
+    }
   }
 
   filter += `[${currentLabel}]copy[vfinal]`;
@@ -366,7 +382,7 @@ function buildFfmpegArgs(project, timeline, fontPath, outputPath, outputConfig) 
   const { inputs, inputMeta, narrationInputIdx, musicInputIdx, badgeInputIndices } = buildInputSpecs(project, timeline);
 
   // Build filter graph using indices
-  const filterComplex = buildFilterGraph(inputMeta, scenes, config, fontPath, W, H, audioDuration, narrationInputIdx, musicInputIdx, badgeInputIndices);
+  const filterComplex = buildFilterGraph(inputMeta, scenes, config, fontPath, W, H, audioDuration, narrationInputIdx, musicInputIdx, badgeInputIndices, project.script);
 
   // Build audio filter using correct input indices
   let audioFilter, audioMap;
@@ -411,7 +427,7 @@ function buildFilterComplexForOutput(project, timeline, fontPath, outputConfig) 
   const { w: W, h: H } = outputConfig;
 
   const { inputMeta, narrationInputIdx, musicInputIdx, badgeInputIndices } = buildInputSpecs(project, timeline);
-  return buildFilterGraph(inputMeta, scenes, config, fontPath, W, H, totalDuration, narrationInputIdx, musicInputIdx, badgeInputIndices);
+  return buildFilterGraph(inputMeta, scenes, config, fontPath, W, H, totalDuration, narrationInputIdx, musicInputIdx, badgeInputIndices, project.script);
 }
 
 // Legacy wrapper for backward compatibility (uses first output config)

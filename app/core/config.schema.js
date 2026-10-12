@@ -35,6 +35,11 @@ const ProgressBarSchema = z.object({
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/).default('#FF0000')
 });
 
+const SubtitlesSchema = z.object({
+  enabled: z.boolean().default(false),
+  fontSize: z.number().int().positive().optional()
+}).optional();
+
 const NarrationSchema = z.object({
   file: z.string().refine((val) => {
     const basename = val.split(/[\\/]/).pop() || val;
@@ -85,7 +90,8 @@ const ConfigSchema = z.object({
   lowerThird: LowerThirdSchema.default({}),
   progressBar: ProgressBarSchema.default({}),
   subtitleFontSizeHorizontal: z.number().int().positive().default(48),
-  subtitleFontSizeVertical: z.number().int().positive().default(64)
+  subtitleFontSizeVertical: z.number().int().positive().default(64),
+  subtitles: SubtitlesSchema.default({})
 });
 
 const ProjectSchema = z.object({
@@ -259,4 +265,4 @@ function getDefaultConfig() {
   return DEFAULT_CONFIG;
 }
 
-module.exports = { validateProject, getDefaultConfig, ProjectSchema, ConfigSchema, FocusPointSchema, ImageWithFocusSchema };
+module.exports = { validateProject, getDefaultConfig, ProjectSchema, ConfigSchema, FocusPointSchema, ImageWithFocusSchema, SubtitlesSchema };
