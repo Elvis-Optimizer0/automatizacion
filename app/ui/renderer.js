@@ -147,12 +147,14 @@ function updateImagesUI() {
     content.hidden = false;
     preview.hidden = true;
     status.textContent = 'Sin archivos';
+    updateScriptStatus();
     return;
   }
 
   content.hidden = true;
   preview.hidden = false;
   status.textContent = `${state.images.length} imágenes · ${formatFileSize(state.images.reduce((sum, img) => sum + (img.size || 0), 0))}`;
+  updateScriptStatus();
 
   grid.innerHTML = state.images.map((img, index) => `
     <div class="preview-item" data-index="${index}">
@@ -371,13 +373,78 @@ function setupScript() {
   function updateScriptStatus() {
     const segments = state.script.trim().split('\n').filter(l => l.trim()).length;
     const hasTimestamps = /\(\d{1,2}:\d{2}\)/.test(state.script);
-    status.textContent = `${segments} ${hasTimestamps ? 'segmentos con timestamps' : 'líneas'} detectad${segments === 1 ? 'o' : 'as'}`;
+    const scenesDetected = hasTimestamps ? segments : 0;
+    const imagesAssigned = state.images.length;
+    status.textContent = `${scenesDetected} escenas detectadas · ${imagesAssigned} imágenes asignadas`;
+    updateSceneWarnings();
+  }
+
+  function updateSceneWarnings() {
+    const warningsEl = $('#scene-warnings');
+    if (!warningsEl) return;
+    
+    const script = state.script;
+    const images = state.images;
+    const warnings = [];
+    
+    // Check for scene markers
+    if (script && script.trim()) {
+      try {
+        // Try to parse scenes from script
+        const sceneMarkers = script.match(/[\[\(]?\s*(?:escena\s*)(\d+)\s*[\]\):]?/gi);
+        if (sceneMarkers) {
+          const sceneNumbers = sceneMarkers.map(m => {
+            const match = m.match(/escena\s*(\d+)/i);
+            return match ? parseInt(match[1], 10) : null;
+          }).filter(n => n !== null);
+          
+          // Check for duplicate scene numbers
+          const seen = new Set();
+          for (const num of sceneNumbers) {
+            if (seen.has(num)) {
+              warnings.push(`⚠ Número de escena duplicado: ${num}`);
+            }
+            seen.add(num);
+          }
+          
+          // Check for scenes without images
+          for (const num of seen) {
+            const hasImage = images.some(img => {
+              const base = img.name.replace(/\.[^.]+$/, '');
+              const match = base.match(/escena[\s_\-]*(\d+)/i);
+              return match && parseInt(match[1], 10) === num;
+            });
+            if (!hasImage) {
+              warnings.push(`⚠ Escena ${num} sin imagen asignada`);
+            }
+          }
+          
+          // Check for images without scene numbers
+          for (const img of images) {
+            const base = img.name.replace(/\.[^.]+$/, '');
+            const match = base.match(/escena[\s_\-]*(\d+)/i);
+            if (!match) {
+              warnings.push(`⚠ Imagen "${img.name}" sin número de escena, se usará orden de carga`);
+            }
+          }
+        }
+      } catch (e) {
+        // Ignore parse errors
+      }
+    }
+    
+    if (warnings.length > 0) {
+      warningsEl.innerHTML = warnings.map(w => `<div class="warning-item">${w}</div>`).join('');
+      warningsEl.hidden = false;
+    } else {
+      warningsEl.hidden = true;
+    }
   }
 }
 
 function setupConfig() {
   const defaultConfig = {
-    resolution: '9:16',
+    resolution: '16:9',
     fps: 30,
     imageFit: 'cover',
     fitTimesToAudio: true,
@@ -385,7 +452,13 @@ function setupConfig() {
     transition: { mode: 'fixed', types: ['slidedown'], duration: 0.5 },
     badges: [],
     lowerThird: { enabled: false, text: '@usuario', opacity: 0.55 },
-    progressBar: { enabled: true, heightPx: 8, color: '#FF0000' }
+    progressBar: { enabled: true, heightPx: 8, color: '#FF0000' },
+    fitMode: 'crop',
+    barsColor: '#000000',
+    outputs: ['16:9'],
+    subtitles: { enabled: false },
+    subtitleFontSizeHorizontal: 48,
+    subtitleFontSizeVertical: 64
   };
 
   state.config = { ...defaultConfig };
@@ -468,6 +541,53 @@ function setupConfig() {
     const val = parseFloat(e.target.value);
     $('#transition-duration-value').textContent = `${val.toFixed(1)}s`;
     state.config.transition.duration = val;
+  });
+
+  // Fit mode segmented (crop, blur, bars)
+  $$('#fitmode-segmented .segment').forEach(btn => {
+    btn.addEventListener('click', () => {
+      $$('#fitmode-segmented .segment').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.config.fitMode = btn.dataset.value;
+      $('#bars-color-group').hidden = btn.dataset.value !== 'bars';
+    });
+  });
+
+  // Band color for bars mode
+  $('#bars-color').addEventListener('input', e => {
+    state.config.barsColor = e.target.value;
+  });
+
+  // Output format chips (allow multiple selection)
+  $$('#output-chips .chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const value = btn.dataset.value;
+      if (btn.classList.contains('active')) {
+        if ($$('#output-chips .chip.active').length > 1) {
+          btn.classList.remove('active');
+          state.config.outputs = state.config.outputs.filter(s => s !== value);
+        }
+      } else {
+        btn.classList.add('active');
+        if (!state.config.outputs.includes(value)) {
+          state.config.outputs.push(value);
+        }
+      }
+      // Ensure resolution is one of the selected outputs
+      if (!state.config.outputs.includes(state.config.resolution)) {
+        state.config.resolution = state.config.outputs[0];
+      }
+    });
+  });
+
+  // Export format chips (single selection, near Export button)
+  $$('#export-format-chips .chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+      $$('#export-format-chips .chip').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      // This sets the resolution for single export
+      state.config.resolution = btn.dataset.value;
+    });
   });
 }
 
@@ -602,6 +722,27 @@ function setupExtras() {
   }
 }
 
+  // Subtitles handlers
+  $('#subtitles-enabled').addEventListener('change', e => {
+    state.config.subtitles = state.config.subtitles || {};
+    state.config.subtitles.enabled = e.target.checked;
+    $('#subtitles-fields').hidden = !e.target.checked;
+    $('#subtitle-font-v-group').hidden = !e.target.checked;
+  });
+
+  $('#subtitle-font-h').addEventListener('input', e => {
+    const val = parseInt(e.target.value, 10);
+    $('#subtitle-font-h-value').textContent = val;
+    state.config.subtitleFontSizeHorizontal = val;
+  });
+
+  $('#subtitle-font-v').addEventListener('input', e => {
+    const val = parseInt(e.target.value, 10);
+    $('#subtitle-font-v-value').textContent = val;
+    state.config.subtitleFontSizeVertical = val;
+  });
+}
+
 async function buildTimeline() {
   if (state.images.length === 0) {
     showToast('Sube al menos una imagen');
@@ -634,6 +775,106 @@ async function buildTimeline() {
   showToast('Línea de tiempo generada', 'success');
 }
 
+}
+  }
+
+  state.timeline = result.timeline;
+  renderTimeline(result.timeline);
+  $('#timeline-container').hidden = false;
+  showToast('Línea de tiempo generada', 'success');
+}
+
+// Focus editor
+let focusEditorImage = null;
+let focusEditorRect = null;
+
+function openFocusEditor(index) {
+  if (!state.timeline || index >= state.timeline.scenes.length) return;
+  
+  const scene = state.timeline.scenes[index];
+  const imageObj = state.images.find(img => img.path === scene.path);
+  if (!imageObj) return;
+
+  focusEditorImage = imageObj;
+  focusEditorRect = scene.focus || { x: 0.5, y: 0.5 };
+
+  // Update focus editor UI
+  const focusImg = $('#focus-main-img');
+  if (focusImg) {
+    focusImg.src = imageObj.blobUrl;
+    focusImg.onload = () => {
+      // Draw overlays
+      drawFocusOverlays();
+    };
+  }
+  
+  $('#focus-editor').hidden = false;
+}
+
+function drawFocusOverlays() {
+  const canvas9x16 = $('#overlay-9x16');
+  const canvas16x9 = $('#overlay-16x9');
+  const focusImg = $('#focus-main-img');
+  
+  if (!canvas9x16 || !canvas16x9 || !focusImg) return;
+  
+  const ctx9 = canvas9x16.getContext('2d');
+  const ctx16 = canvas16x9.getContext('2d');
+  
+  // Set canvas size to match image display
+  const rect = focusImg.getBoundingClientRect();
+  canvas9x16.width = rect.width;
+  canvas9x16.height = rect.height;
+  canvas16x9.width = rect.width;
+  canvas16x9.height = rect.height;
+  
+  // Draw 9:16 overlay
+  ctx9.clearRect(0, 0, canvas9x16.width, canvas9x16.height);
+  ctx9.strokeStyle = '#ff6b00';
+  ctx9.lineWidth = 2;
+  const h9 = canvas9x16.width * 16 / 9;
+  const y9 = (canvas9x16.height - h9) / 2;
+  ctx9.strokeRect(0, y9, canvas9x16.width, h9);
+  
+  // Draw 16:9 overlay
+  ctx16.clearRect(0, 0, canvas16x9.width, canvas16x9.height);
+  ctx16.strokeStyle = '#00bfff';
+  ctx16.lineWidth = 2;
+  const w16 = canvas16x9.height * 16 / 9;
+  const x16 = (canvas16x9.width - w16) / 2;
+  ctx16.strokeRect(x16, 0, w16, canvas16x9.height);
+  
+  // Draw focus point
+  const fx = focusEditorRect.x * canvas9x16.width;
+  const fy = focusEditorRect.y * canvas9x16.height;
+  ctx9.fillStyle = '#ff6b00';
+  ctx9.beginPath();
+  ctx9.arc(fx, fy, 8, 0, Math.PI * 2);
+  ctx9.fill();
+}
+
+function closeFocusEditor() {
+  $('#focus-editor').hidden = true;
+  focusEditorImage = null;
+  focusEditorRect = null;
+}
+
+function saveFocusPoint() {
+  if (focusEditorImage && focusEditorRect && state.timeline) {
+    // Find the scene with this image
+    const sceneIndex = state.timeline.scenes.findIndex(s => s.path === focusEditorImage.path);
+    if (sceneIndex >= 0) {
+      state.timeline.scenes[sceneIndex].focus = { ...focusEditorRect };
+      // Also update in state.images
+      const imgIndex = state.images.findIndex(img => img.path === focusEditorImage.path);
+      if (imgIndex >= 0) {
+        state.images[imgIndex].focus = { ...focusEditorRect };
+      }
+    }
+  }
+  closeFocusEditor();
+}
+
 function renderTimeline(timeline) {
   const factorEl = $('#timeline-factor');
   const body = $('#timeline-body');
@@ -649,7 +890,7 @@ function renderTimeline(timeline) {
   body.innerHTML = timeline.scenes.map((scene, index) => `
     <tr data-index="${index}">
       <td>${index + 1}</td>
-      <td><img class="thumb" src="${scene.blobUrl || scene.file}" alt="Escena ${index + 1}"></td>
+      <td><img class="thumb focus-thumb" src="${scene.blobUrl || scene.file}" alt="Escena ${index + 1}" data-index="${index}"></td>
       <td>${formatTime(scene.start)}</td>
       <td>${formatTime(scene.end)}</td>
       <td>
@@ -663,6 +904,14 @@ function renderTimeline(timeline) {
       <td>${scene.transitionType}</td>
     </tr>
   `).join('');
+
+  // Focus editor click handler on thumbnails
+  body.querySelectorAll('.focus-thumb').forEach(thumb => {
+    thumb.addEventListener('click', e => {
+      const index = parseInt(e.currentTarget.dataset.index, 10);
+      openFocusEditor(index);
+    });
+  });
 
   body.querySelectorAll('.duration-input button').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -844,19 +1093,47 @@ async function init() {
   $('#render-preview').addEventListener('click', renderPreview);
   $('#export-video').addEventListener('click', exportVideo);
 
+  // Focus editor buttons
+  $('#focus-center').addEventListener('click', () => {
+    if (focusEditorRect) {
+      focusEditorRect = { x: 0.5, y: 0.5 };
+      drawFocusOverlays();
+    }
+  });
+
+  $('#focus-apply-all').addEventListener('click', () => {
+    if (focusEditorRect && state.timeline) {
+      state.timeline.scenes.forEach(scene => {
+        scene.focus = { ...focusEditorRect };
+      });
+      state.images.forEach(img => {
+        img.focus = { ...focusEditorRect };
+      });
+      drawFocusOverlays();
+    }
+  });
+
+  // Close focus editor when clicking outside
+  $('#focus-editor').addEventListener('click', e => {
+    if (e.target === e.currentTarget) {
+      closeFocusEditor();
+    }
+  });
+
+  // Focus editor canvas click to set focus point
+  $$('#focus-editor canvas').forEach(canvas => {
+    canvas.addEventListener('click', e => {
+      const rect = canvas.getBoundingClientRect();
+      const x = (e.clientX - rect.left) / rect.width;
+      const y = (e.clientY - rect.top) / rect.height;
+      focusEditorRect = { x: Math.max(0, Math.min(1, x)), y: Math.max(0, Math.min(1, y)) };
+      drawFocusOverlays();
+    });
+  });
+
   window.api.getDefaultConfig().then(config => {
     state.config = { ...state.config, ...config };
   });
-
-  const style = document.createElement('style');
-  style.textContent = `
-    @keyframes slideIn {
-      from { opacity: 0; transform: translateY(20px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-  `;
-  document.head.appendChild(style);
-}
 
 if (typeof Sortable === 'undefined') {
   const script = document.createElement('script');

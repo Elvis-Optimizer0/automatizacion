@@ -110,7 +110,8 @@
             Ajustar tiempos al largo del audio
           </label>
         </div>
-        <p class="status-text" id="script-status">0 escenas detectadas</p>
+        <p class="status-text" id="script-status">0 escenas detectadas · 0 imágenes asignadas</p>
+        <div class="warning-area" id="scene-warnings" hidden></div>
         <input type="file" id="script-file-input" accept=".txt" hidden>
       </section>
 
@@ -135,7 +136,13 @@
             <div class="segmented" id="fitmode-segmented">
               <button class="segment active" data-value="crop">Recortar con enfoque</button>
               <button class="segment" data-value="blur">Fondo desenfocado</button>
+              <button class="segment" data-value="bars">Marco (bandas)</button>
             </div>
+          </div>
+
+          <div class="config-group" id="bars-color-group" hidden>
+            <label>Color de bandas</label>
+            <input type="color" id="bars-color" value="#000000">
           </div>
 
           <div class="config-group">
@@ -261,6 +268,25 @@
           </div>
         </details>
 
+        <details class="collapsible" id="subtitles-section">
+          <summary>Subtítulos</summary>
+          <div class="collapsible-content">
+            <label class="toggle">
+              <input type="checkbox" id="subtitles-enabled">
+              <span class="toggle-slider"></span>
+              Habilitar subtítulos
+            </label>
+            <div class="config-group" id="subtitles-fields" hidden>
+              <label>Tamaño fuente horizontal (16:9): <span id="subtitle-font-h-value">48</span></label>
+              <input type="range" id="subtitle-font-h" min="20" max="120" value="48">
+            </div>
+            <div class="config-group" id="subtitle-font-v-group" hidden>
+              <label>Tamaño fuente vertical (9:16): <span id="subtitle-font-v-value">64</span></label>
+              <input type="range" id="subtitle-font-v" min="20" max="120" value="64">
+            </div>
+          </div>
+        </details>
+
         <details class="collapsible" id="progress-bar-section">
           <summary>Barra de progreso</summary>
           <div class="collapsible-content">
@@ -357,6 +383,15 @@
           </div>
 
           <div class="export-section">
+            <div class="export-format-group">
+              <label>Formato: </label>
+              <div class="chips" id="export-format-chips">
+                <button class="chip active" data-value="16:9">16:9</button>
+                <button class="chip" data-value="9:16">9:16</button>
+                <button class="chip" data-value="1:1">1:1</button>
+                <button class="chip" data-value="4:5">4:5</button>
+              </div>
+            </div>
             <button class="btn btn-primary btn-large" id="export-video">Exportar</button>
             <div class="progress-bar-container" id="export-progress" hidden>
               <div class="progress-bar-fill" id="export-progress-fill"></div>
