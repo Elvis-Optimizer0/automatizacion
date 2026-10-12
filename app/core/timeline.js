@@ -1,4 +1,4 @@
-const { parseScript, hasTimestamps } = require('./script-parser');
+const { parseScript, hasTimestamps, parseScenes, imageSceneNumber } = require('./script-parser');
 
 function mulberry32(seed) {
   return function() {
@@ -155,24 +155,116 @@ function buildTimeline(project, audioDuration) {
   const transitionDuration = config.transition.duration;
 
   let durations, factor = 1, estEnd = audioDuration, adjustedStarts = [], sceneStarts = [], sceneEnds = [];
+  let sceneAssignments = null; // Will hold the mapping of scene number -> image index
+
+  // Parse scenes from script if available
+  let parsedScenes = [];
+  let useSceneMarkers = false;
 
   if (script && script.trim()) {
-    const segments = parseScript(script);
-    const hasTs = hasTimestamps(script);
+    try {
+      parsedScenes = parseScenes(script);
+      useSceneMarkers = parsedScenes.length > 0 && parsedScenes.some(s => s.number !== undefined);
+    } catch (e) {
+      // If parsing fails, fall back to old behavior
+      console.warn('[buildTimeline] parseScenes failed, falling back:', e.message);
+    }
+  }
 
-    if (hasTs) {
-      const result = computeDurationsFromScript(segments, audioDuration, N, config.fitTimesToAudio);
-      durations = result.durations;
-      factor = result.factor;
-      estEnd = result.estEnd;
-      adjustedStarts = result.adjustedStarts;
-      sceneStarts = result.sceneStarts;
-      sceneEnds = result.sceneEnds;
-    } else {
-      durations = computeDurationsNoTimestamps(script, audioDuration, N);
+  if (useSceneMarkers) {
+    // Assign images to scenes by number
+    const imageBySceneNumber = {};
+    const imagesWithoutNumber = [];
+    
+    for (let i = 0; i < images.length; i++) {
+      const imageObj = typeof images[i] === 'string' ? { file: images[i] } : images[i];
+      const file = imageObj.file;
+      const sceneNum = imageSceneNumber(file);
+      
+      if (sceneNum !== null) {
+        if (imageBySceneNumber[sceneNum]) {
+          throw new Error(`E_DUPLICATE_IMAGE_SCENE: Múltiples imágenes para escena ${sceneNum}`);
+        }
+        imageBySceneNumber[sceneNum] = { index: i, image: imageObj };
+      } else {
+        imagesWithoutNumber.push({ index: i, image: imageObj });
+      }
+    }
+
+    // Build ordered list of scenes with their assigned images
+    const orderedScenes = [];
+    const warnings = [];
+    
+    for (const parsedScene of parsedScenes.sort((a, b) => a.number - b.number)) {
+      const assigned = imageBySceneNumber[parsedScene.number];
+      if (assigned) {
+        orderedScenes.push({
+          sceneNumber: parsedScene.number,
+          image: assigned.image,
+          imageIndex: assigned.index,
+          start: parsedScene.start ?? 0,
+          end: parsedScene.end ?? null,
+          text: parsedScene.text
+        });
+      } else {
+        warnings.push(`Escena ${parsedScene.number} sin imagen asignada`);
+      }
+    }
+
+    // Check for images without matching scenes
+    for (const unassigned of imagesWithoutNumber) {
+      warnings.push(`Imagen "${unassigned.image.file}" sin número de escena, se usará orden de carga`);
+    }
+    
+    // Check for scenes without images
+    for (const parsedScene of parsedScenes) {
+      if (!imageBySceneNumber[parsedScene.number]) {
+        warnings.push(`Escena ${parsedScene.number} sin imagen`);
+      }
+    }
+
+    // Store warnings for UI
+    sceneAssignments = { orderedScenes, warnings };
+
+    // Compute durations from scene markers
+    if (orderedScenes.length > 0) {
+      durations = [];
+      for (let i = 0; i < orderedScenes.length; i++) {
+        const scene = orderedScenes[i];
+        const nextScene = orderedScenes[i + 1];
+        let dur;
+        if (scene.end !== null && scene.start !== null) {
+          dur = scene.end - scene.start;
+        } else if (nextScene && nextScene.start !== null) {
+          dur = nextScene.start - scene.start;
+        } else {
+          // Last scene: fill to audio duration
+          const usedSoFar = durations.reduce((a, b) => a + b, 0);
+          dur = audioDuration - usedSoFar;
+        }
+        durations.push(Math.max(0.1, dur));
+      }
     }
   } else {
-    durations = computeDurationsNoScript(audioDuration, N);
+    // Fallback to old timestamp-based parsing
+    if (script && script.trim()) {
+      const segments = parseScript(script);
+      const hasTs = hasTimestamps(script);
+
+      if (hasTs) {
+        const result = computeDurationsFromScript(segments, audioDuration, N, config.fitTimesToAudio);
+        durations = result.durations;
+        factor = result.factor;
+        estEnd = result.estEnd;
+        adjustedStarts = result.adjustedStarts;
+        sceneStarts = result.sceneStarts;
+        sceneEnds = result.sceneEnds;
+      } else {
+        durations = computeDurationsNoTimestamps(script, audioDuration, N);
+      }
+    } else {
+      durations = computeDurationsNoScript(audioDuration, N);
+    }
   }
 
   if (Object.keys(sceneDurationOverrides).length > 0) {
@@ -181,20 +273,36 @@ function buildTimeline(project, audioDuration) {
 
   validateSceneDurations(durations, transitionDuration);
 
+  // Build final scenes array
   const scenes = [];
-  for (let i = 0; i < N; i++) {
-    const start = i === 0 ? 0 : scenes[i - 1].end;
-    // Add transition duration to end time (except last) to compensate for xfade overlap
-    const transitionCompensation = (i < N - 1) ? transitionDuration : 0;
-    const end = start + durations[i] + transitionCompensation;
-    const imageObj = typeof images[i] === 'string' ? { file: images[i] } : images[i];
-    const file = imageObj.file;
-    const isVideo = file.toLowerCase().endsWith('.mp4');
+  const totalSceneCount = useSceneMarkers && sceneAssignments ? sceneAssignments.orderedScenes.length : N;
 
-    const sceneOverride = sceneOverrides[i.toString()];
-    const zoomStyle = sceneOverride?.zoom || (isVideo ? 'none' : selectStyle(config.zoom.styles, config.zoom.mode, i));
-    const transitionType = sceneOverride?.transition || (i < N - 1 ? selectTransitionType(config.transition.types, config.transition.mode, i) : 'cut');
-    const zoomIntensity = sceneOverride?.zoomIntensity || 'normal';
+  for (let i = 0; i < totalSceneCount; i++) {
+    const start = i === 0 ? 0 : scenes[i - 1].end;
+    const transitionCompensation = (i < totalSceneCount - 1) ? transitionDuration : 0;
+    const end = start + durations[i] + transitionCompensation;
+
+    let imageObj, file, isVideo, zoomStyle, transitionType, zoomIntensity, focus;
+
+    if (useSceneMarkers && sceneAssignments) {
+      const assigned = sceneAssignments.orderedScenes[i];
+      imageObj = assigned.image;
+      file = imageObj.file;
+      isVideo = file.toLowerCase().endsWith('.mp4');
+      zoomStyle = (isVideo ? 'none' : selectStyle(config.zoom.styles, config.zoom.mode, i));
+      transitionType = (i < totalSceneCount - 1 ? selectTransitionType(config.transition.types, config.transition.mode, i) : 'cut');
+      zoomIntensity = 'normal';
+      focus = imageObj.focus || { x: 0.5, y: 0.5 };
+    } else {
+      imageObj = typeof images[i] === 'string' ? { file: images[i] } : images[i];
+      file = imageObj.file;
+      isVideo = file.toLowerCase().endsWith('.mp4');
+      const sceneOverride = sceneOverrides[i.toString()];
+      zoomStyle = sceneOverride?.zoom || (isVideo ? 'none' : selectStyle(config.zoom.styles, config.zoom.mode, i));
+      transitionType = sceneOverride?.transition || (i < totalSceneCount - 1 ? selectTransitionType(config.transition.types, config.transition.mode, i) : 'cut');
+      zoomIntensity = sceneOverride?.zoomIntensity || 'normal';
+      focus = imageObj.focus || { x: 0.5, y: 0.5 };
+    }
 
     scenes.push({
       index: i,
@@ -202,12 +310,12 @@ function buildTimeline(project, audioDuration) {
       path: imageObj.path,
       start,
       end,
-      duration: durations[i],  // Keep original duration for tests
+      duration: durations[i],
       isVideo,
       zoomStyle,
       transitionType,
       zoomIntensity,
-      focus: imageObj.focus || { x: 0.5, y: 0.5 }
+      focus
     });
   }
 
@@ -221,7 +329,8 @@ function buildTimeline(project, audioDuration) {
     factor,
     estEnd,
     durationDiff,
-    fitApplied: config.fitTimesToAudio && script && hasTimestamps(script)
+    fitApplied: config.fitTimesToAudio && script && hasTimestamps(script),
+    sceneAssignments: useSceneMarkers ? sceneAssignments : null
   };
 }
 
