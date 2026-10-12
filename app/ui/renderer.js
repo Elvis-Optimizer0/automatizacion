@@ -98,6 +98,7 @@ function safeAddEventListener(el, event, handler, options) {
     el.addEventListener(event, handler, options);
     return true;
   }
+  console.warn(`[safeAddEventListener] Element not found for event "${event}"`);
   return false;
 }
 
