@@ -184,7 +184,9 @@ function buildTimeline(project, audioDuration) {
   const scenes = [];
   for (let i = 0; i < N; i++) {
     const start = i === 0 ? 0 : scenes[i - 1].end;
-    const end = start + durations[i];
+    // Add transition duration to end time (except last) to compensate for xfade overlap
+    const transitionCompensation = (i < N - 1) ? transitionDuration : 0;
+    const end = start + durations[i] + transitionCompensation;
     const imageObj = typeof images[i] === 'string' ? { file: images[i] } : images[i];
     const file = imageObj.file;
     const isVideo = file.toLowerCase().endsWith('.mp4');
@@ -200,7 +202,7 @@ function buildTimeline(project, audioDuration) {
       path: imageObj.path,
       start,
       end,
-      duration: durations[i],
+      duration: durations[i],  // Keep original duration for tests
       isVideo,
       zoomStyle,
       transitionType,

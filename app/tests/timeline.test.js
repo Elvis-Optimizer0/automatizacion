@@ -93,7 +93,8 @@ describe('buildTimeline', () => {
     const timeline = buildTimeline(project, audioDuration);
 
     expect(timeline.scenes).toHaveLength(5);
-    expect(timeline.totalDuration).toBeCloseTo(audioDuration, 1);
+    // totalDuration includes transition compensation: audioDuration + (N-1)*transitionDuration
+    expect(timeline.totalDuration).toBeCloseTo(audioDuration + 4 * 0.5, 1);
     expect(timeline.factor).toBeCloseTo(1.2, 1);
     expect(timeline.fitApplied).toBe(true);
   });
@@ -108,7 +109,7 @@ describe('buildTimeline', () => {
     const audioDuration = 24;
     const timeline = buildTimeline(project, audioDuration);
 
-    expect(timeline.totalDuration).toBeCloseTo(audioDuration, 1);
+    expect(timeline.totalDuration).toBeCloseTo(audioDuration + 4 * 0.5, 1);
     expect(timeline.fitApplied).toBe(false);
   });
 
@@ -122,7 +123,7 @@ describe('buildTimeline', () => {
     const timeline = buildTimeline(project, audioDuration);
 
     expect(timeline.scenes).toHaveLength(6);
-    expect(timeline.totalDuration).toBeCloseTo(audioDuration, 1);
+    expect(timeline.totalDuration).toBeCloseTo(audioDuration + 5 * 0.5, 1);
     expect(timeline.fitApplied).toBe(false);
   });
 
@@ -133,7 +134,7 @@ describe('buildTimeline', () => {
 
     expect(timeline.scenes).toHaveLength(6);
     expect(timeline.scenes[0].duration).toBeCloseTo(4, 1);
-    expect(timeline.totalDuration).toBeCloseTo(audioDuration, 1);
+    expect(timeline.totalDuration).toBeCloseTo(audioDuration + 5 * 0.5, 1);
   });
 
   it('applies sceneDurationOverrides and rebalances', () => {
@@ -146,7 +147,7 @@ describe('buildTimeline', () => {
     const timeline = buildTimeline(project, audioDuration);
 
     expect(timeline.scenes[2].duration).toBe(8);
-    expect(timeline.totalDuration).toBeCloseTo(audioDuration, 1);
+    expect(timeline.totalDuration).toBeCloseTo(audioDuration + 5 * 0.5, 1);
   });
 
   it('throws E_SCENE_TOO_SHORT for too short scenes', () => {
