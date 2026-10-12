@@ -24,7 +24,7 @@ describe('config.schema', () => {
     });
   });
 
-  describe('validateProject', () => {
+describe('validateProject', () => {
     const validProject = {
       images: [{ file: 'scene1.png', path: 'C:/fake/path/scene1.png' }, { file: 'scene2.png', path: 'C:/fake/path/scene2.png' }],
       narration: { file: 'voz.mp3', path: 'C:/fake/path/voz.mp3' },
@@ -57,7 +57,7 @@ describe('config.schema', () => {
       exts.forEach(ext => {
         const result = validateProject({ ...validProject, images: [{ file: `scene.${ext}`, path: `C:/fake/path/scene.${ext}` }] });
         expect(result.images[0].file).toBe(`scene.${ext}`);
-        expect(result.images[0].focus).toEqual({ x: 0.5, y: 0.5 });
+        expect(result.images[0].focus).toBeUndefined();
       });
     });
 
@@ -187,7 +187,7 @@ describe('config.schema', () => {
         images: [{ file: 'scene1.png', path: 'C:/fake/path/scene1.png', focus: { x: 0.3, y: 0.7 } }, { file: 'scene2.png', path: 'C:/fake/path/scene2.png' }]
       });
       expect(result.images[0]).toEqual({ file: 'scene1.png', focus: { x: 0.3, y: 0.7 }, path: 'C:/fake/path/scene1.png', blobUrl: undefined });
-      expect(result.images[1]).toEqual({ file: 'scene2.png', focus: { x: 0.5, y: 0.5 }, path: 'C:/fake/path/scene2.png', blobUrl: undefined });
+      expect(result.images[1]).toEqual({ file: 'scene2.png', path: 'C:/fake/path/scene2.png', blobUrl: undefined });
     });
   });
 
@@ -196,16 +196,20 @@ describe('config.schema', () => {
       const mockFile = new File(['test'], 'escena1.png', { type: 'image/png' });
       Object.defineProperty(mockFile, 'path', { value: 'C:/fake/path/escena1.png', writable: true });
       const project = {
-        images: [mockFile, { file: 'scene2.png', path: 'C:/fake/path/scene2.png' }],
+        images: [{ file: mockFile }, { file: 'scene2.png', path: 'C:/fake/path/scene2.png' }],
         narration: { file: new File(['audio'], 'voz.mp3', { type: 'audio/mpeg' }) },
         config: {}
       };
       Object.defineProperty(project.narration.file, 'path', { value: 'C:/fake/path/voz.mp3', writable: true });
       const result = validateProject(project);
       expect(result.images[0].file).toBe('escena1.png');
-      expect(result.images[0].path).toBe('C:/fake/path/escena1.png');
+      expect(result.images[0].path).toBe('');
+      expect(result.images[0].missing).toBe(true);
       expect(result.images[1].file).toBe('scene2.png');
+      expect(result.images[1].path).toBe('C:/fake/path/scene2.png');
       expect(result.narration.file).toBe('voz.mp3');
+      expect(result.narration.path).toBe('');
+      expect(result.narration.missing).toBe(true);
     });
 
     it('accepts File object for music', () => {
@@ -219,8 +223,48 @@ describe('config.schema', () => {
       };
       const result = validateProject(project);
       expect(result.music.file).toBe('musica.mp3');
-      expect(result.music.path).toBe('C:/fake/path/musica.mp3');
+      expect(result.music.path).toBe('');
+      expect(result.music.missing).toBe(true);
       expect(result.music.volume).toBe(0.5);
+    });
+
+    it('preserves absolute path for images when path is already absolute', () => {
+      const project = {
+        images: [{ file: 'scene1.png', path: 'C:/absolute/path/scene1.png' }],
+        narration: { file: 'voz.mp3', path: 'C:/absolute/path/voz.mp3' },
+        config: {}
+      };
+      const result = validateProject(project);
+      expect(result.images[0].path).toBe('C:/absolute/path/scene1.png');
+      expect(result.images[0].missing).toBeUndefined();
+      expect(result.narration.path).toBe('C:/absolute/path/voz.mp3');
+      expect(result.narration.missing).toBeUndefined();
+    });
+
+    it('clears path and sets missing:true when path is not absolute', () => {
+      const project = {
+        images: [{ file: 'scene1.png', path: 'relative/path/scene1.png' }],
+        narration: { file: 'voz.mp3', path: 'relative/voz.mp3' },
+        music: { file: 'musica.mp3', path: 'relative/musica.mp3', volume: 0.5 },
+        config: {}
+      };
+      const result = validateProject(project);
+      expect(result.images[0].path).toBe('');
+      expect(result.images[0].missing).toBe(true);
+      expect(result.narration.path).toBe('');
+      expect(result.narration.missing).toBe(true);
+      expect(result.music.path).toBe('');
+      expect(result.music.missing).toBe(true);
+    });
+
+    it('handles UNC paths as absolute', () => {
+      const project = {
+        images: [{ file: 'scene1.png', path: '\\\\server\\share\\scene1.png' }],
+        config: {}
+      };
+      const result = validateProject(project);
+      expect(result.images[0].path).toBe('\\\\server\\share\\scene1.png');
+      expect(result.images[0].missing).toBeUndefined();
     });
   });
 });

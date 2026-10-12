@@ -22,19 +22,19 @@ function getAudioDuration(audioPath) {
 
     proc.on('close', code => {
       if (code !== 0) {
-        reject(new Error(`E_FFMPEG_MISSING: ffprobe falló: ${stderr}`));
+        reject(new Error(`E_FFPROBE_FAILED: ffprobe falló: ${stderr}`));
         return;
       }
       const duration = parseFloat(stdout.trim());
       if (isNaN(duration)) {
-        reject(new Error(`E_FFMPEG_MISSING: No se pudo obtener duración de ${audioPath}`));
+        reject(new Error(`E_FFPROBE_FAILED: No se pudo obtener duración de ${audioPath}`));
         return;
       }
       resolve(duration);
     });
 
     proc.on('error', err => {
-      reject(new Error(`E_FFMPEG_MISSING: ffprobe no encontrado: ${err.message}`));
+      reject(new Error(`E_FFPROBE_FAILED: ffprobe no encontrado: ${err.message}`));
     });
   });
 }
@@ -170,14 +170,14 @@ function validateInputPaths(project) {
   if (!project.narration?.path || !path.isAbsolute(project.narration.path) || !require('fs').existsSync(project.narration.path)) {
     throw new Error(`E_INPUT_MISSING: Narración sin ruta absoluta válida: ${project.narration?.path}`);
   }
-  inputs.push({ type: 'narración', file: project.narration.file, path: project.narration.path });
+  inputs.push({ type: 'narración', path: project.narration.path });
   
   // Música
   if (project.music && project.music.path) {
     if (!path.isAbsolute(project.music.path) || !require('fs').existsSync(project.music.path)) {
-      throw new Error(`E_INPUT_MISSING: Música "${project.music.file}" sin ruta absoluta válida: ${project.music.path}`);
+      throw new Error(`E_INPUT_MISSING: Música sin ruta absoluta válida: ${project.music.path}`);
     }
-    inputs.push({ type: 'música', file: project.music.file, path: project.music.path });
+    inputs.push({ type: 'música', path: project.music.path });
   }
   
   // Badges

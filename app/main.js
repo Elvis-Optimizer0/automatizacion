@@ -3,7 +3,7 @@ const path = require('node:path');
 const { verifyBinaries } = require('./core/binaries');
 const { validateProject, getDefaultConfig } = require('./core/config.schema');
 const { buildTimeline } = require('./core/timeline');
-const { renderVideo, renderPreview, getAudioDuration, renderAllOutputs, renderVideoForOutput } = require('./core/render');
+const { renderVideo, renderPreview, getAudioDuration, renderAllOutputs, renderVideoForOutput, validateInputPaths } = require('./core/render');
 
 let mainWindow = null;
 let lastOutputDir = null;
@@ -97,7 +97,9 @@ ipcMain.handle('openFolder', async (event, folderPath) => {
 
 ipcMain.handle('buildTimeline', async (event, project) => {
   try {
+    console.log('[buildTimeline] images[0]=', JSON.stringify(project.images?.[0]), 'narration=', JSON.stringify(project.narration));
     const validated = validateProject(project);
+    validateInputPaths(validated);
     const narrationPath = validated.narration?.path;
     if (!narrationPath || !path.isAbsolute(narrationPath)) {
       throw new Error(`E_INPUT_MISSING: Narración sin ruta absoluta válida`);

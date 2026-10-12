@@ -37,36 +37,11 @@ function debounce(fn, ms) {
 }
 
 async function makeEntry(file) {
-  const path = await window.api.getRealPath(file);
-  if (path && path.length > 0) {
-    return {
-      name: file.name,
-      path,
-      blobUrl: URL.createObjectURL(file),
-      size: file.size,
-      type: file.type || (file.name.toLowerCase().endsWith('.mp4') ? 'video' : 'image')
-    };
-  }
-  
-  // Fallback: copiar a temp via stage-file
-  const buffer = await file.arrayBuffer();
-  const stagedPath = await window.api.stageFile(file.name, buffer);
-  if (!stagedPath) {
-    throw new Error(`No se pudo obtener ruta para ${file.name}`);
-  }
-  
-  // Validar que la ruta staged sea absoluta
-  if (!stagedPath || !stagedPath.startsWith('/') && !/^[a-zA-Z]:[\\/]/.test(stagedPath)) {
-    throw new Error(`stage-file devolvió ruta no absoluta: ${stagedPath}`);
-  }
-  
-  return {
-    name: file.name,
-    path: stagedPath,
-    blobUrl: URL.createObjectURL(file),
-    size: file.size,
-    type: file.type || (file.name.toLowerCase().endsWith('.mp4') ? 'video' : 'image')
-  };
+  let p = await window.api.getRealPath(file);
+  if (!p) p = await window.api.stageFile(file.name, await file.arrayBuffer());
+  console.log('[makeEntry]', file.name, 'path=', JSON.stringify(p));
+  if (!p || !/^([a-zA-Z]:[\\/]|\\\\)/.test(p)) throw new Error('No se obtuvo ruta absoluta para ' + file.name);
+  return { name: file.name, path: p, blobUrl: URL.createObjectURL(file), size: file.size, type: file.type };
 }
 
 let state = {
@@ -831,7 +806,7 @@ if (result.success) {
 }
 
 function buildProject() {
-  return {
+  const project = {
     images: state.images.map(img => ({
       file: img.name,
       path: img.path,
@@ -850,6 +825,8 @@ function buildProject() {
     config: state.config,
     sceneDurationOverrides: state.sceneDurationOverrides
   };
+  console.log('[buildProject] images[0]=', JSON.stringify(project.images?.[0]), 'narration=', JSON.stringify(project.narration));
+  return project;
 }
 
 function getFontPath() {
