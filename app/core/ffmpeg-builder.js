@@ -114,78 +114,190 @@ function buildContainFilter(W, H) {
   return `scale=${W}:${H}:force_original_aspect_ratio=decrease`;
 }
 
-function buildImageFilterChain(scene, W, H, fps, zoomEnabled, zoomConfig, fitMode, fallbackPath) {
-  const { path: scenePath, blobUrl, file, duration, zoomStyle, zoomIntensity, focus } = scene;
-  const isVideo = file.toLowerCase().endsWith('.mp4');
-  let inputPath = scenePath;
-  if (!inputPath || !require('path').isAbsolute(inputPath)) {
-    if (fallbackPath && require('path').isAbsolute(fallbackPath)) {
-      inputPath = fallbackPath;
+// Build input specs with indices for filter graph
+function buildInputSpecs(project, timeline) {
+  const { config } = project;
+  const { scenes } = timeline;
+  const inputs = [];
+  const inputMeta = [];
+
+  // Scene inputs (images/videos)
+  for (let i = 0; i < scenes.length; i++) {
+    const scene = scenes[i];
+    let inputPath = scene.path;
+    if (!inputPath || !path.isAbsolute(inputPath)) {
+      const fallback = project.images?.[i]?.path;
+      if (fallback && path.isAbsolute(fallback)) {
+        inputPath = fallback;
+      } else {
+        throw new Error(`E_INPUT_MISSING: Imagen ${i} ("${scene.file}") sin ruta absoluta válida: ${scene.path ?? 'undefined'}`);
+      }
+    }
+    if (scene.isVideo) {
+      inputs.push('-stream_loop', '-1', '-i', inputPath);
     } else {
-      throw new Error(`E_INPUT_MISSING: Imagen "${file}" sin ruta absoluta válida`);
+      inputs.push('-i', inputPath);
+    }
+    inputMeta.push({ type: 'scene', index: i, sceneIndex: i, path: inputPath, isVideo: scene.isVideo });
+  }
+
+  // Narration input
+  const narrationPath = project.narration?.path;
+  if (!narrationPath || !path.isAbsolute(narrationPath)) {
+    throw new Error(`E_INPUT_MISSING: Narración sin ruta absoluta válida`);
+  }
+  inputs.push('-i', narrationPath);
+  const narrationInputIdx = inputMeta.length;
+  inputMeta.push({ type: 'narration', index: narrationInputIdx });
+
+  // Music input
+  let musicInputIdx = -1;
+  if (project.music && project.music.path) {
+    if (!path.isAbsolute(project.music.path)) {
+      throw new Error(`E_INPUT_MISSING: Música sin ruta absoluta válida`);
+    }
+    inputs.push('-i', project.music.path);
+    musicInputIdx = inputMeta.length;
+    inputMeta.push({ type: 'music', index: musicInputIdx });
+  }
+
+  // Badge inputs
+  const badgeInputIndices = [];
+  if (Array.isArray(config?.badges)) {
+    for (let i = 0; i < config.badges.length; i++) {
+      const badge = config.badges[i];
+      if (badge.path && path.isAbsolute(badge.path)) {
+        inputs.push('-i', badge.path);
+        const badgeIdx = inputMeta.length;
+        inputMeta.push({ type: 'badge', index: badgeIdx, badgeIndex: i });
+        badgeInputIndices.push(badgeIdx);
+      }
     }
   }
+
+  return { inputs, inputMeta, narrationInputIdx, musicInputIdx, badgeInputIndices };
+}
+
+// Build filter graph using input indices (not paths)
+function buildFilterGraph(inputMeta, scenes, config, fontPath, W, H, totalDuration, narrationInputIdx, musicInputIdx, badgeInputIndices) {
+  const fps = config.fps;
+  const images = scenes.map(s => s); // scenes already have path info
+  let filter = '';
+
+  // Scene filters - use input indices like [0:v], [1:v], etc.
+  for (let i = 0; i < scenes.length; i++) {
+    const scene = scenes[i];
+    const meta = inputMeta.find(m => m.type === 'scene' && m.sceneIndex === i);
+    const inputIdx = meta?.index ?? i;
+    filter += buildImageFilterChainByIndex(scene, inputIdx, W, H, fps, config.zoom.enabled, config.zoom, config.fitMode) + ';';
+  }
+
+  filter += buildTransitionChain(scenes, config.transition.duration, W, H);
+
+  const lastLabel = scenes.length === 1 ? 'v0' : 'vout';
+  let currentLabel = lastLabel;
+
+  if (config.badges.length > 0) {
+    for (let i = 0; i < config.badges.length; i++) {
+      const badge = config.badges[i];
+      const nextLabel = i === config.badges.length - 1 ? 'vbadges' : `vbadge${i}`;
+      // Find badge input index
+      const badgeMeta = inputMeta.find(m => m.type === 'badge' && m.badgeIndex === i);
+      const badgeInputIdx = badgeMeta?.index;
+      if (badgeInputIdx !== undefined) {
+        const badgeW = Math.round(W * badge.sizePercent / 100);
+        const badgeH = Math.round(badgeW);
+        const { x, y } = getPositionCoords(badge.position, W, H, badgeW, badgeH);
+        const at = badge.at ?? 0;
+        const dur = badge.duration ?? totalDuration;
+        const enableExpr = `between(t,${at},${at + dur})`;
+        const popAnim = `scale=${badgeW}*min(1\\,1.15*max(0\\,1-4*(t-${at})))*gt(t\\,${at})*lt(t\\,${at}+0.4)+${badgeW}*gte(t\\,${at}+0.4)`;
+        filter += `[${badgeInputIdx}:v]scale=${badgeW}:${badgeH}:force_original_aspect_ratio=decrease,${popAnim}[badge${i}];`;
+        filter += `[${currentLabel}][badge${i}]overlay=x=${x}:y=${y}:enable='${enableExpr}'[${nextLabel}];`;
+        currentLabel = nextLabel;
+      }
+    }
+  }
+
+  const lowerThirdFilter = buildLowerThirdFilter(config.lowerThird, W, H, fontPath);
+  if (lowerThirdFilter) {
+    filter += `[${currentLabel}]${lowerThirdFilter}[vlower];`;
+    currentLabel = 'vlower';
+  }
+
+  const progressFilter = buildProgressBarFilter(config.progressBar, W, H, totalDuration);
+  if (progressFilter) {
+    filter += `[${currentLabel}]${progressFilter}[vprogress];`;
+    currentLabel = 'vprogress';
+  }
+
+  filter += `[${currentLabel}]copy[vfinal]`;
+
+  return filter;
+}
+
+// Build image filter chain using input index instead of path
+function buildImageFilterChainByIndex(scene, inputIdx, W, H, fps, zoomEnabled, zoomConfig, fitMode) {
+  const { file, duration, zoomStyle, zoomIntensity, focus } = scene;
+  const isVideo = file.toLowerCase().endsWith('.mp4');
+  const idx = `[${inputIdx}:v]`;
 
   if (isVideo) {
     const cropFilter = fitMode === 'crop' ? buildCropFilter(scene, W, H, fitMode) : '';
     const scaleFilter = cropFilter || `scale=${W}:${H}:force_original_aspect_ratio=cover`;
-    return `[${inputPath}]${scaleFilter},pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,format=yuv420p,setsar=1,trim=duration=${duration}[v${scene.index}]`;
+    return `${idx}${scaleFilter},pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,format=yuv420p,setsar=1,trim=duration=${duration}[v${scene.index}]`;
   }
 
   if (fitMode === 'blur') {
     const blurBg = buildBlurFilter(W, H);
     const containFg = buildContainFilter(W, H);
     if (!zoomEnabled || zoomStyle === 'none') {
-      return `[${inputPath}]${blurBg}[bg${scene.index}];[${inputPath}]${containFg}[fg${scene.index}];[bg${scene.index}][fg${scene.index}]overlay=(W-w)/2:(H-h)/2,format=yuv420p,setsar=1,trim=duration=${duration}[v${scene.index}]`;
+      return `${idx}${blurBg}[bg${scene.index}];${idx}${containFg}[fg${scene.index}];[bg${scene.index}][fg${scene.index}]overlay=(W-w)/2:(H-h)/2,format=yuv420p,setsar=1,trim=duration=${duration}[v${scene.index}]`;
     }
     const zoomFilter = buildZoomFilter(zoomStyle, zoomConfig.initialScale, zoomConfig.intensity, duration, fps, W, H, zoomIntensity);
-    return `[${inputPath}]${blurBg}[bg${scene.index}];[${inputPath}]${containFg},${zoomFilter},format=yuv420p,setsar=1[fg${scene.index}];[bg${scene.index}][fg${scene.index}]overlay=(W-w)/2:(H-h)/2,trim=duration=${duration}[v${scene.index}]`;
+    return `${idx}${blurBg}[bg${scene.index}];${idx}${containFg},${zoomFilter},format=yuv420p,setsar=1[fg${scene.index}];[bg${scene.index}][fg${scene.index}]overlay=(W-w)/2:(H-h)/2,trim=duration=${duration}[v${scene.index}]`;
   }
 
   const cropFilter = buildCropFilter(scene, W, H, fitMode);
 
   if (!zoomEnabled || zoomStyle === 'none') {
-    return `[${inputPath}]${cropFilter},pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,format=yuv420p,setsar=1,trim=duration=${duration}[v${scene.index}]`;
+    return `${idx}${cropFilter},pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2,format=yuv420p,setsar=1,trim=duration=${duration}[v${scene.index}]`;
   }
 
   const zoomFilter = buildZoomFilter(zoomStyle, zoomConfig.initialScale, zoomConfig.intensity, duration, fps, W, H, zoomIntensity);
-  return `[${inputPath}]${cropFilter},${zoomFilter},format=yuv420p,setsar=1[v${scene.index}]`;
+  return `${idx}${cropFilter},${zoomFilter},format=yuv420p,setsar=1[v${scene.index}]`;
 }
 
-function buildBadgeFilter(badge, W, H, sceneIndex, totalDuration) {
-  const { path, blobUrl, file, at, duration, sizePercent, position } = badge;
-  const badgeW = Math.round(W * sizePercent / 100);
-  const badgeH = Math.round(badgeW);
-  const { x, y } = getPositionCoords(position, W, H, badgeW, badgeH);
-  const inputPath = badge.path;
-  if (!inputPath || !path.isAbsolute(inputPath)) {
-    throw new Error(`E_INPUT_MISSING: Badge "${file}" sin ruta absoluta válida`);
+// Fixed transition chain with correct offsets
+function buildTransitionChain(scenes, transitionDuration, W, H) {
+  if (scenes.length === 1) return '';
+
+  let chain = '';
+  let prevLabel = 'v0';
+
+  // Accumulator tracks end time of previous scene
+  let acc = scenes[0].duration;
+
+  for (let i = 1; i < scenes.length; i++) {
+    const prevScene = scenes[i - 1];
+    const scene = scenes[i];
+
+    // Resolve transition
+    const { transition, duration } = resolveXfade(scene.transitionType, scene.fps || 30);
+
+    // Offset = end of previous scene - transition duration (positive, non-decreasing)
+    const offset = Math.max(0, acc - duration);
+
+    const nextLabel = i === scenes.length - 1 ? 'vout' : `x${i}`;
+
+    chain += `[${prevLabel}][v${i}]xfade=transition=${transition}:duration=${duration}:offset=${offset}[${nextLabel}];`;
+
+    // Update accumulator: add current scene duration minus transition overlap
+    acc += scene.duration - duration;
+    prevLabel = nextLabel;
   }
 
-  const enableExpr = `between(t,${at},${at + duration})`;
-  const popAnim = `scale=${badgeW}*min(1\,1.15*max(0\,1-4*(t-${at})))*gt(t\,${at})*lt(t\,${at}+0.4)+${badgeW}*gte(t\,${at}+0.4)`;
-
-  return `[${inputPath}]scale=${badgeW}:${badgeH}:force_original_aspect_ratio=decrease,${popAnim}[badge${sceneIndex}];`;
-}
-
-function buildLowerThirdFilter(config, W, H, fontPath) {
-  if (!config.enabled) return '';
-
-  const boxH = Math.round(H * 0.08);
-  const y = Math.round(H * 0.88);
-  let fontSize = Math.round(H * 0.03);
-  const maxTextWidth = W * 0.9;
-  const escapedFont = escapeFontPath(fontPath);
-
-  return `drawbox=x=0:y=${y}:w=${W}:h=${boxH}:color=black@${config.opacity}:t=fill,drawtext=fontfile='${escapedFont}':text='${config.text.replace(/'/g, "\\'")}':fontsize=${fontSize}:fontcolor=white:x=(w-text_w)/2:y=${y}+(h-text_h)/2`;
-}
-
-function buildProgressBarFilter(config, W, H, totalDuration) {
-  if (!config.enabled) return '';
-
-  const h = config.heightPx;
-  const color = config.color;
-  return `drawbox=x=0:y=${H - h}:w='${W}*t/${totalDuration}':h=${h}:color=${color}:t=fill`;
+  return chain;
 }
 
 // Valid xfade transitions in FFmpeg 6.1+
@@ -209,82 +321,24 @@ function resolveXfade(name, fps) {
   throw new Error(`Transición xfade no válida: "${name}". Use una de: ${Array.from(XFADE_TRANSITIONS).join(', ')}`);
 }
 
-function buildTransitionChain(scenes, transitionDuration, W, H) {
-  if (scenes.length === 1) return '';
+function buildLowerThirdFilter(config, W, H, fontPath) {
+  if (!config.enabled) return '';
 
-  let chain = '';
-  let prevLabel = 'v0';
+  const boxH = Math.round(H * 0.08);
+  const y = Math.round(H * 0.88);
+  let fontSize = Math.round(H * 0.03);
+  const maxTextWidth = W * 0.9;
+  const escapedFont = escapeFontPath(fontPath);
 
-  // Acumulador de tiempo real (con solapes)
-  let acc = 0;
-
-  for (let i = 1; i < scenes.length; i++) {
-    const prevScene = scenes[i - 1];
-    const scene = scenes[i];
-
-    // Resuelve la transición
-    const { transition, duration } = resolveXfade(scene.transitionType, scene.fps || 30);
-
-    // El offset es el tiempo acumulado MENOS la duración de la transición
-    // (porque el xfade solapa el final de la anterior con el inicio de la actual)
-    const offset = acc - duration;
-
-    const nextLabel = i === scenes.length - 1 ? 'vout' : `x${i}`;
-
-    chain += `[${prevLabel}][v${i}]xfade=transition=${transition}:duration=${duration}:offset=${offset}[${nextLabel}];`;
-
-    // Actualiza acumulador: suma la duración de la escena anterior MENOS la transición
-    // (porque el solape ya se contó en la anterior)
-    acc += prevScene.duration - duration;
-    prevLabel = nextLabel;
-  }
-
-  return chain;
+  return `drawbox=x=0:y=${y}:w=${W}:h=${boxH}:color=black@${config.opacity}:t=fill,drawtext=fontfile='${escapedFont}':text='${config.text.replace(/'/g, "\\'")}':fontsize=${fontSize}:fontcolor=white:x=(w-text_w)/2:y=${y}+(h-text_h)/2`;
 }
 
-function buildFilterComplex(project, timeline, fontPath) {
-  const { config } = project;
-  const { scenes, totalDuration } = timeline;
-  const fps = config.fps;
-  const images = project.images || [];
+function buildProgressBarFilter(config, W, H, totalDuration) {
+  if (!config.enabled) return '';
 
-  let filter = '';
-
-  for (let i = 0; i < scenes.length; i++) {
-    const scene = scenes[i];
-    filter += buildImageFilterChain(scene, config.outputs[0].w, config.outputs[0].h, fps, config.zoom.enabled, config.zoom, config.fitMode, images[i]?.path) + ';';
-  }
-
-  filter += buildTransitionChain(scenes, config.transition.duration, config.outputs[0].w, config.outputs[0].h);
-
-  const lastLabel = scenes.length === 1 ? 'v0' : 'vout';
-  let currentLabel = lastLabel;
-
-  if (config.badges.length > 0) {
-    for (let i = 0; i < config.badges.length; i++) {
-      const badge = config.badges[i];
-      const nextLabel = i === config.badges.length - 1 ? 'vbadges' : `vbadge${i}`;
-      filter += buildBadgeFilter(badge, config.outputs[0].w, config.outputs[0].h, i, totalDuration);
-      filter += `[${currentLabel}][badge${i}]overlay=x=${getPositionCoords(badge.position, config.outputs[0].w, config.outputs[0].h, Math.round(config.outputs[0].w * badge.sizePercent / 100), Math.round(config.outputs[0].w * badge.sizePercent / 100)).x}:y=${getPositionCoords(badge.position, config.outputs[0].w, config.outputs[0].h, Math.round(config.outputs[0].w * badge.sizePercent / 100), Math.round(config.outputs[0].w * badge.sizePercent / 100)).y}:enable='${buildBadgeFilter(badge, config.outputs[0].w, config.outputs[0].h, i, totalDuration).match(/enable='([^']+)'/)[1]}'[${nextLabel}];`;
-      currentLabel = nextLabel;
-    }
-  }
-
-  const lowerThirdFilter = buildLowerThirdFilter(config.lowerThird, config.outputs[0].w, config.outputs[0].h, fontPath);
-  if (lowerThirdFilter) {
-    filter += `[${currentLabel}]${lowerThirdFilter}[vlower];`;
-    currentLabel = 'vlower';
-  }
-
-  const progressFilter = buildProgressBarFilter(config.progressBar, config.outputs[0].w, config.outputs[0].h, totalDuration);
-  if (progressFilter) {
-    filter += `[${currentLabel}]${progressFilter}[vprogress];`;
-    currentLabel = 'vprogress';
-  }
-
-  filter += `[${currentLabel}]copy[vfinal]`;
-
-  return filter;
+  const h = config.heightPx;
+  const color = config.color;
+  return `drawbox=x=0:y=${H - h}:w='${W}*t/${totalDuration}':h=${h}:color=${color}:t=fill`;
 }
 
 function buildFfmpegArgs(project, timeline, fontPath, outputPath, outputConfig) {
@@ -296,46 +350,22 @@ function buildFfmpegArgs(project, timeline, fontPath, outputPath, outputConfig) 
   const fps = config.fps;
   const { w: W, h: H } = outputConfig;
 
-  const inputs = [];
+  // Build inputs with indices
+  const { inputs, inputMeta, narrationInputIdx, musicInputIdx, badgeInputIndices } = buildInputSpecs(project, timeline);
 
-  for (let i = 0; i < scenes.length; i++) {
-    const scene = scenes[i];
-    let inputPath = scene.path;
-    if (!inputPath || !path.isAbsolute(inputPath)) {
-      const fallback = project.images?.[i]?.path;
-      if (fallback && path.isAbsolute(fallback)) {
-        inputPath = fallback;
-      } else {
-        throw new Error(`E_INPUT_MISSING: Imagen ${i} ("${scene.file}") sin ruta absoluta válida: ${scene.path ?? 'undefined'}`);
-      }
-    }
-    if (scene.isVideo) {
-      inputs.push('-stream_loop', '-1', '-i', inputPath);
-    } else {
-      inputs.push('-i', inputPath);
-    }
-  }
+  // Build filter graph using indices
+  const filterComplex = buildFilterGraph(inputMeta, scenes, config, fontPath, W, H, audioDuration, narrationInputIdx, musicInputIdx, badgeInputIndices);
 
-  const narrationPath = project.narration?.path;
-  if (!narrationPath || !path.isAbsolute(narrationPath)) {
-    throw new Error(`E_INPUT_MISSING: Narración sin ruta absoluta válida`);
-  }
-  inputs.push('-i', narrationPath);
-
-  if (project.music && project.music.path) {
-    if (!path.isAbsolute(project.music.path)) {
-      throw new Error(`E_INPUT_MISSING: Música sin ruta absoluta válida`);
-    }
-    inputs.push('-i', project.music.path);
+  // Build audio filter using correct input indices
+  let audioFilter, audioMap;
+  if (musicInputIdx >= 0) {
     const musicVol = project.music.volume;
-    audioFilter = `[0:a]volume=1[a0];[${scenes.length}:a]volume=${musicVol},afade=in:d=1,afade=out:st=${audioDuration - 2}:d=2,atrim=duration=${audioDuration}[a1];[a0][a1]amix=inputs=2:duration=first:dropout_transition=0[aout]`;
+    audioFilter = `[${narrationInputIdx}:a]volume=1[a0];[${musicInputIdx}:a]volume=${musicVol},afade=in:d=1,afade=out:st=${audioDuration - 2}:d=2,atrim=duration=${audioDuration}[a1];[a0][a1]amix=inputs=2:duration=first:dropout_transition=0[aout]`;
     audioMap = '[aout]';
   } else {
-    audioFilter = `[0:a]volume=1,atrim=duration=${audioDuration}[aout]`;
+    audioFilter = `[${narrationInputIdx}:a]volume=1,atrim=duration=${audioDuration}[aout]`;
     audioMap = '[aout]';
   }
-
-  const filterComplex = buildFilterComplexForOutput(project, timeline, fontPath, outputConfig);
 
   const args = [
     ...inputs,
@@ -368,44 +398,14 @@ function buildFilterComplexForOutput(project, timeline, fontPath, outputConfig) 
   const fps = config.fps;
   const { w: W, h: H } = outputConfig;
 
-  let filter = '';
-  const images = project.images || [];
+  const { inputMeta, narrationInputIdx, musicInputIdx, badgeInputIndices } = buildInputSpecs(project, timeline);
+  return buildFilterGraph(inputMeta, scenes, config, fontPath, W, H, totalDuration, narrationInputIdx, musicInputIdx, badgeInputIndices);
+}
 
-  for (let i = 0; i < scenes.length; i++) {
-    const scene = scenes[i];
-    filter += buildImageFilterChain(scene, W, H, fps, config.zoom.enabled, config.zoom, config.fitMode, images[i]?.path) + ';';
-  }
-
-  filter += buildTransitionChain(scenes, config.transition.duration, W, H);
-
-  const lastLabel = scenes.length === 1 ? 'v0' : 'vout';
-  let currentLabel = lastLabel;
-
-  if (config.badges.length > 0) {
-    for (let i = 0; i < config.badges.length; i++) {
-      const badge = config.badges[i];
-      const nextLabel = i === config.badges.length - 1 ? 'vbadges' : `vbadge${i}`;
-      filter += buildBadgeFilter(badge, W, H, i, totalDuration);
-      filter += `[${currentLabel}][badge${i}]overlay=x=${getPositionCoords(badge.position, W, H, Math.round(W * badge.sizePercent / 100), Math.round(W * badge.sizePercent / 100)).x}:y=${getPositionCoords(badge.position, W, H, Math.round(W * badge.sizePercent / 100), Math.round(W * badge.sizePercent / 100)).y}:enable='${buildBadgeFilter(badge, W, H, i, totalDuration).match(/enable='([^']+)'/)[1]}'[${nextLabel}];`;
-      currentLabel = nextLabel;
-    }
-  }
-
-  const lowerThirdFilter = buildLowerThirdFilter(config.lowerThird, W, H, fontPath);
-  if (lowerThirdFilter) {
-    filter += `[${currentLabel}]${lowerThirdFilter}[vlower];`;
-    currentLabel = 'vlower';
-  }
-
-  const progressFilter = buildProgressBarFilter(config.progressBar, W, H, totalDuration);
-  if (progressFilter) {
-    filter += `[${currentLabel}]${progressFilter}[vprogress];`;
-    currentLabel = 'vprogress';
-  }
-
-  filter += `[${currentLabel}]copy[vfinal]`;
-
-  return filter;
+// Legacy wrapper for backward compatibility (uses first output config)
+function buildFilterComplex(project, timeline, fontPath) {
+  const outputConfig = getResolutionWH(project.config.outputs?.[0] || '9:16');
+  return buildFilterComplexForOutput(project, timeline, fontPath, outputConfig);
 }
 
 function buildOutputConfigs(config) {
@@ -438,5 +438,10 @@ module.exports = {
   generateOutputFilename,
   buildCropFilter,
   buildBlurFilter,
-  buildContainFilter
+  buildContainFilter,
+  buildTransitionChain,
+  resolveXfade,
+  buildInputSpecs,
+  buildFilterGraph,
+  buildImageFilterChainByIndex
 };
