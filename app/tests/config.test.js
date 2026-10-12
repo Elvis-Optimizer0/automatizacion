@@ -5,8 +5,8 @@ describe('config.schema', () => {
   describe('getDefaultConfig', () => {
     it('returns correct defaults', () => {
       const config = getDefaultConfig();
-      expect(config.outputs).toEqual(['9:16', '16:9']);
-      expect(config.resolution).toBe('9:16');
+      expect(config.outputs).toEqual(['16:9', '9:16', '1:1']);
+      expect(config.resolution).toBe('16:9');
       expect(config.fps).toBe(30);
       expect(config.imageFit).toBe('cover');
       expect(config.fitTimesToAudio).toBe(true);
@@ -21,6 +21,8 @@ describe('config.schema', () => {
       expect(config.badges).toEqual([]);
       expect(config.lowerThird.enabled).toBe(false);
       expect(config.progressBar.enabled).toBe(true);
+      expect(config.subtitleFontSizeHorizontal).toBe(48);
+      expect(config.subtitleFontSizeVertical).toBe(64);
     });
   });
 
@@ -39,8 +41,8 @@ describe('validateProject', () => {
 
     it('applies default config', () => {
       const result = validateProject(validProject);
-      expect(result.config.outputs).toEqual(['9:16', '16:9']);
-      expect(result.config.resolution).toBe('9:16');
+      expect(result.config.outputs).toEqual(['16:9', '9:16', '1:1']);
+      expect(result.config.resolution).toBe('16:9');
       expect(result.config.fps).toBe(30);
     });
 

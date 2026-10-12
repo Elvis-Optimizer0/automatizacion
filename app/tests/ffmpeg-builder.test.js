@@ -15,8 +15,8 @@ describe('ffmpeg-builder', () => {
       expect(getResolutionWH('1:1')).toEqual({ w: 1080, h: 1080 });
     });
 
-    it('defaults to 9:16', () => {
-      expect(getResolutionWH('invalid')).toEqual({ w: 1080, h: 1920 });
+    it('defaults to 16:9', () => {
+      expect(getResolutionWH('invalid')).toEqual({ w: 1920, h: 1080 });
     });
   });
 

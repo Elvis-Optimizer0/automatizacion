@@ -73,9 +73,9 @@ const ImageWithFocusSchema = z.object({
 });
 
 const ConfigSchema = z.object({
-  outputs: z.array(z.enum(['9:16', '16:9', '1:1'])).min(1).max(3).default(['9:16', '16:9']),
-  resolution: z.enum(['9:16', '16:9', '1:1']).optional().default('9:16'),
-  fitMode: z.enum(['crop', 'blur']).default('crop'),
+  outputs: z.array(z.enum(['9:16', '16:9', '1:1', '4:5'])).min(1).max(4).default(['16:9', '9:16', '1:1']),
+  resolution: z.enum(['9:16', '16:9', '1:1', '4:5']).optional().default('16:9'),
+  fitMode: z.enum(['crop', 'blur', 'bars']).default('crop'),
   fps: z.number().int().positive().default(30),
   imageFit: z.enum(['cover', 'contain']).default('cover'),
   fitTimesToAudio: z.boolean().default(true),
@@ -83,7 +83,9 @@ const ConfigSchema = z.object({
   transition: TransitionConfigSchema.default({}),
   badges: z.array(BadgeSchema).default([]),
   lowerThird: LowerThirdSchema.default({}),
-  progressBar: ProgressBarSchema.default({})
+  progressBar: ProgressBarSchema.default({}),
+  subtitleFontSizeHorizontal: z.number().int().positive().default(48),
+  subtitleFontSizeVertical: z.number().int().positive().default(64)
 });
 
 const ProjectSchema = z.object({
@@ -101,8 +103,8 @@ const ProjectSchema = z.object({
 });
 
 const DEFAULT_CONFIG = {
-  outputs: ['9:16', '16:9'],
-  resolution: '9:16',
+  outputs: ['16:9', '9:16', '1:1'],
+  resolution: '16:9',
   fitMode: 'crop',
   fps: 30,
   imageFit: 'cover',
@@ -129,7 +131,9 @@ const DEFAULT_CONFIG = {
     enabled: true,
     heightPx: 8,
     color: '#FF0000'
-  }
+  },
+  subtitleFontSizeHorizontal: 48,
+  subtitleFontSizeVertical: 64
 };
 
 function isAbsolutePath(p) {
@@ -137,6 +141,11 @@ function isAbsolutePath(p) {
 }
 
 function migrateProject(data) {
+  // Default to horizontal 16:9 if no outputs specified
+  if (data.config && !data.config.outputs && !data.config.resolution) {
+    data.config.outputs = ['16:9', '9:16', '1:1'];
+    data.config.resolution = '16:9';
+  }
   if (data.config && data.config.resolution && !data.config.outputs) {
     data.config.outputs = [data.config.resolution];
   }

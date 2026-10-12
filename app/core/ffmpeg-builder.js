@@ -5,7 +5,8 @@ function getResolutionWH(resolution) {
     case '9:16': return { w: 1080, h: 1920 };
     case '16:9': return { w: 1920, h: 1080 };
     case '1:1': return { w: 1080, h: 1080 };
-    default: return { w: 1080, h: 1920 };
+    case '4:5': return { w: 1080, h: 1350 };
+    default: return { w: 1920, h: 1080 };
   }
 }
 
