@@ -278,4 +278,4 @@ function renderVideoForOutput(project, timeline, fontPath, outputPath, outputCon
   });
 }
 
-module.exports = { renderVideo, renderPreview, getAudioDuration, renderAllOutputs, renderVideoForOutput };
+module.exports = { renderVideo, renderPreview, getAudioDuration, renderAllOutputs, renderVideoForOutput, validateInputPaths };
