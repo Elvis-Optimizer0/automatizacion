@@ -373,7 +373,14 @@ function setupScript() {
   function updateScriptStatus() {
     const segments = state.script.trim().split('\n').filter(l => l.trim()).length;
     const hasTimestamps = /\(\d{1,2}:\d{2}\)/.test(state.script);
-    const scenesDetected = hasTimestamps ? segments : 0;
+    
+    // Also check for new scene marker format [Escena N] 0:00 - 0:30
+    const hasSceneMarkers = /[\[\(]?\s*(?:escena\s*)(\d+)\s*[\]\):]?/gi.test(state.script);
+    const sceneMarkers = state.script.match(/[\[\(]?\s*(?:escena\s*)(\d+)\s*[\]\):]?/gi);
+    const scenesDetected = hasSceneMarkers 
+      ? (sceneMarkers ? sceneMarkers.length : 0)
+      : (hasTimestamps ? segments : 0);
+    
     const imagesAssigned = state.images.length;
     status.textContent = `${scenesDetected} escenas detectadas · ${imagesAssigned} imágenes asignadas`;
     updateSceneWarnings();
@@ -772,6 +779,19 @@ async function buildTimeline() {
   state.timeline = result.timeline;
   renderTimeline(result.timeline);
   $('#timeline-container').hidden = false;
+  
+  // Show server-side warnings if any
+  if (result.sceneAssignments && result.sceneAssignments.warnings && result.sceneAssignments.warnings.length > 0) {
+    const warningsEl = $('#scene-warnings');
+    if (warningsEl) {
+      warningsEl.innerHTML = result.sceneAssignments.warnings.map(w => `<div class="warning-item">${w}</div>`).join('');
+      warningsEl.hidden = false;
+    }
+  } else {
+    const warningsEl = $('#scene-warnings');
+    if (warningsEl) warningsEl.hidden = true;
+  }
+  
   showToast('Línea de tiempo generada', 'success');
 }
 
