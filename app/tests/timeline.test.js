@@ -201,3 +201,40 @@ describe('buildTimeline', () => {
     expect(timeline.scenes[2].path).toBe('C:/test/img3.png');
   });
 });
+
+describe('validateProject with new config fields', () => {
+  it('accepts fitMode, barsColor, outputs, subtitles, font sizes', () => {
+    const { validateProject } = require('../core/config.schema');
+    
+    const project = {
+      images: [{ file: 'img1.png', path: 'C:/test/img1.png' }],
+      narration: { file: 'voz.mp3', path: 'C:/test/voz.mp3' },
+      config: {
+        outputs: ['16:9'],
+        resolution: '16:9',
+        fitMode: 'bars',
+        barsColor: '#000000',
+        fps: 30,
+        fitTimesToAudio: true,
+        imageFit: 'cover',
+        zoom: { enabled: true, initialScale: 1.22, intensity: 0.10, mode: 'fixed', styles: ['kenburns'] },
+        transition: { mode: 'fixed', types: ['fade'], duration: 0.5 },
+        badges: [],
+        lowerThird: { enabled: false, text: '@usuario', opacity: 0.55 },
+        progressBar: { enabled: true, heightPx: 8, color: '#FF0000' },
+        subtitleFontSizeHorizontal: 48,
+        subtitleFontSizeVertical: 64,
+        subtitles: { enabled: true, fontSize: 48 }
+      },
+      sceneDurationOverrides: {}
+    };
+    
+    const result = validateProject(project);
+    expect(result.config.fitMode).toBe('bars');
+    expect(result.config.barsColor).toBe('#000000');
+    expect(result.config.outputs).toEqual(['16:9']);
+    expect(result.config.subtitles.enabled).toBe(true);
+    expect(result.config.subtitleFontSizeHorizontal).toBe(48);
+    expect(result.config.subtitleFontSizeVertical).toBe(64);
+  });
+});

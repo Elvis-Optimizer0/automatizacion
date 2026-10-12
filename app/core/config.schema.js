@@ -91,7 +91,8 @@ const ConfigSchema = z.object({
   progressBar: ProgressBarSchema.default({}),
   subtitleFontSizeHorizontal: z.number().int().positive().default(48),
   subtitleFontSizeVertical: z.number().int().positive().default(64),
-  subtitles: SubtitlesSchema.default({})
+  subtitles: SubtitlesSchema.default({}),
+  barsColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).default('#000000')
 });
 
 const ProjectSchema = z.object({
