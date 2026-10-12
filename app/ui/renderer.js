@@ -93,6 +93,14 @@ function $$(selector) {
   return document.querySelectorAll(selector);
 }
 
+function safeAddEventListener(el, event, handler, options) {
+  if (el && typeof el.addEventListener === 'function') {
+    el.addEventListener(event, handler, options);
+    return true;
+  }
+  return false;
+}
+
 function showToast(message, type = 'error') {
   const toast = $(`#${type}-toast`);
   toast.textContent = message;
@@ -103,31 +111,35 @@ function showToast(message, type = 'error') {
 function setupDropZone(dropzoneId, inputId, onFiles, options = {}) {
   const dropzone = $(`#${dropzoneId}`);
   const input = $(`#${inputId}`);
+  if (!dropzone || !input) {
+    console.error(`[setupDropZone] Missing elements: ${dropzoneId} or ${inputId}`);
+    return;
+  }
   const content = dropzone.querySelector('.drop-zone-content');
   const preview = dropzone.querySelector('.drop-zone-preview');
   const fileInfo = dropzone.querySelector('.file-info');
 
   ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt => {
-    dropzone.addEventListener(evt, e => {
+    safeAddEventListener(dropzone, evt, e => {
       e.preventDefault();
       e.stopPropagation();
     });
   });
 
   ['dragenter', 'dragover'].forEach(evt => {
-    dropzone.addEventListener(evt, () => dropzone.classList.add('drag-over'));
+    safeAddEventListener(dropzone, evt, () => dropzone.classList.add('drag-over'));
   });
 
   ['dragleave', 'drop'].forEach(evt => {
-    dropzone.addEventListener(evt, () => dropzone.classList.remove('drag-over'));
+    safeAddEventListener(dropzone, evt, () => dropzone.classList.remove('drag-over'));
   });
 
-  dropzone.addEventListener('drop', e => {
+  safeAddEventListener(dropzone, 'drop', e => {
     const files = Array.from(e.dataTransfer.files);
     if (files.length > 0) onFiles(files);
   });
 
-  dropzone.addEventListener('click', () => input.click());
+  safeAddEventListener(dropzone, 'click', () => input.click());
 
   input.addEventListener('change', e => {
     const files = Array.from(e.target.files);
@@ -168,7 +180,7 @@ function updateImagesUI() {
   `).join('');
 
   $$('#images-grid .remove-btn').forEach(btn => {
-    btn.addEventListener('click', e => {
+    safeAddEventListener(btn, 'click', e => {
       e.stopPropagation();
       const index = parseInt(e.currentTarget.dataset.index, 10);
       state.images.splice(index, 1);
@@ -215,7 +227,7 @@ function setupImages() {
     updateTimelineButton();
   });
 
-  $('#clear-images').addEventListener('click', () => {
+  safeAddEventListener($('#clear-images'), 'click', () => {
     state.images = [];
     updateImagesUI();
     updateTimelineButton();
@@ -254,20 +266,20 @@ function setupAudio() {
     }
   });
 
-  $('#clear-narration').addEventListener('click', e => {
+  safeAddEventListener($('#clear-narration'), 'click', e => {
     e.stopPropagation();
     state.narration = null;
     updateNarrationUI();
     updateTimelineButton();
   });
 
-  $('#clear-music').addEventListener('click', e => {
+  safeAddEventListener($('#clear-music'), 'click', e => {
     e.stopPropagation();
     state.music = null;
     updateMusicUI();
   });
 
-  $('#music-volume').addEventListener('input', e => {
+  safeAddEventListener($('#music-volume'), 'input', e => {
     const val = parseInt(e.target.value, 10);
     $('#music-volume-value').textContent = `${val}%`;
     if (state.music) state.music.volume = val / 100;
@@ -342,7 +354,7 @@ function setupScript() {
     state.config.fitTimesToAudio = fitTimes.checked;
   });
 
-  $('#paste-script').addEventListener('click', async () => {
+  safeAddEventListener($('#paste-script'), 'click', async () => {
     try {
       const text = await navigator.clipboard.readText();
       textarea.value = text;
@@ -353,11 +365,11 @@ function setupScript() {
     }
   });
 
-  $('#load-script').addEventListener('click', () => {
+  safeAddEventListener($('#load-script'), 'click', () => {
     $('#script-file-input').click();
   });
 
-  $('#script-file-input').addEventListener('change', e => {
+  safeAddEventListener($('#script-file-input'), 'change', e => {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
@@ -471,31 +483,31 @@ function setupConfig() {
   state.config = { ...defaultConfig };
 
   $$('#resolution-segmented .segment').forEach(btn => {
-    btn.addEventListener('click', () => {
+    safeAddEventListener(btn, 'click', () => {
       $$('#resolution-segmented .segment').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       state.config.resolution = btn.dataset.value;
     });
   });
 
-  $('#zoom-enabled').addEventListener('change', e => {
+  safeAddEventListener($('#zoom-enabled'), 'change', e => {
     state.config.zoom.enabled = e.target.checked;
   });
 
-  $('#zoom-scale').addEventListener('input', e => {
+  safeAddEventListener($('#zoom-scale'), 'input', e => {
     const val = parseInt(e.target.value, 10);
     $('#zoom-scale-value').textContent = `${val}%`;
     state.config.zoom.initialScale = val / 100;
   });
 
-  $('#zoom-intensity').addEventListener('input', e => {
+  safeAddEventListener($('#zoom-intensity'), 'input', e => {
     const val = parseInt(e.target.value, 10);
     $('#zoom-intensity-value').textContent = `${val}%`;
     state.config.zoom.intensity = val / 100;
   });
 
   $$('#zoom-mode-segmented .segment').forEach(btn => {
-    btn.addEventListener('click', () => {
+    safeAddEventListener(btn, 'click', () => {
       $$('#zoom-mode-segmented .segment').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       state.config.zoom.mode = btn.dataset.value;
@@ -503,7 +515,7 @@ function setupConfig() {
   });
 
   $$('#zoom-styles-chips .chip').forEach(btn => {
-    btn.addEventListener('click', () => {
+    safeAddEventListener(btn, 'click', () => {
       const value = btn.dataset.value;
       if (btn.classList.contains('active')) {
         if ($$('#zoom-styles-chips .chip.active').length > 1) {
@@ -520,7 +532,7 @@ function setupConfig() {
   });
 
   $$('#transition-mode-segmented .segment').forEach(btn => {
-    btn.addEventListener('click', () => {
+    safeAddEventListener(btn, 'click', () => {
       $$('#transition-mode-segmented .segment').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       state.config.transition.mode = btn.dataset.value;
@@ -528,7 +540,7 @@ function setupConfig() {
   });
 
   $$('#transition-chips .chip').forEach(btn => {
-    btn.addEventListener('click', () => {
+    safeAddEventListener(btn, 'click', () => {
       const value = btn.dataset.value;
       if (btn.classList.contains('active')) {
         if ($$('#transition-chips .chip.active').length > 1) {
@@ -544,7 +556,7 @@ function setupConfig() {
     });
   });
 
-  $('#transition-duration').addEventListener('input', e => {
+  safeAddEventListener($('#transition-duration'), 'input', e => {
     const val = parseFloat(e.target.value);
     $('#transition-duration-value').textContent = `${val.toFixed(1)}s`;
     state.config.transition.duration = val;
@@ -552,7 +564,7 @@ function setupConfig() {
 
   // Fit mode segmented (crop, blur, bars)
   $$('#fitmode-segmented .segment').forEach(btn => {
-    btn.addEventListener('click', () => {
+    safeAddEventListener(btn, 'click', () => {
       $$('#fitmode-segmented .segment').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       state.config.fitMode = btn.dataset.value;
@@ -561,13 +573,13 @@ function setupConfig() {
   });
 
   // Band color for bars mode
-  $('#bars-color').addEventListener('input', e => {
+  safeAddEventListener($('#bars-color'), 'input', e => {
     state.config.barsColor = e.target.value;
   });
 
   // Output format chips (allow multiple selection)
   $$('#output-chips .chip').forEach(btn => {
-    btn.addEventListener('click', () => {
+    safeAddEventListener(btn, 'click', () => {
       const value = btn.dataset.value;
       if (btn.classList.contains('active')) {
         if ($$('#output-chips .chip.active').length > 1) {
@@ -589,7 +601,7 @@ function setupConfig() {
 
   // Export format chips (single selection, near Export button)
   $$('#export-format-chips .chip').forEach(btn => {
-    btn.addEventListener('click', () => {
+    safeAddEventListener(btn, 'click', () => {
       $$('#export-format-chips .chip').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       // This sets the resolution for single export
@@ -599,32 +611,32 @@ function setupConfig() {
 }
 
 function setupExtras() {
-  $('#lower-third-enabled').addEventListener('change', e => {
+  safeAddEventListener($('#lower-third-enabled'), 'change', e => {
     state.config.lowerThird.enabled = e.target.checked;
     $('#lower-third-fields').hidden = !e.target.checked;
     $('#lower-third-opacity-group').hidden = !e.target.checked;
   });
 
-  $('#lower-third-text').addEventListener('input', e => {
+  safeAddEventListener($('#lower-third-text'), 'input', e => {
     state.config.lowerThird.text = e.target.value;
   });
 
-  $('#lower-third-opacity').addEventListener('input', e => {
+  safeAddEventListener($('#lower-third-opacity'), 'input', e => {
     const val = parseInt(e.target.value, 10);
     $('#lower-third-opacity-value').textContent = `${val}%`;
     state.config.lowerThird.opacity = val / 100;
   });
 
-  $('#progress-bar-enabled').addEventListener('change', e => {
+  safeAddEventListener($('#progress-bar-enabled'), 'change', e => {
     state.config.progressBar.enabled = e.target.checked;
     $('#progress-bar-fields').hidden = !e.target.checked;
   });
 
-  $('#progress-bar-color').addEventListener('input', e => {
+  safeAddEventListener($('#progress-bar-color'), 'input', e => {
     state.config.progressBar.color = e.target.value;
   });
 
-  $('#progress-bar-height').addEventListener('input', e => {
+  safeAddEventListener($('#progress-bar-height'), 'input', e => {
     const val = parseInt(e.target.value, 10);
     $('#progress-bar-height-value').textContent = `${val}px`;
     state.config.progressBar.heightPx = val;
@@ -647,7 +659,7 @@ function setupExtras() {
     updateBadgesUI();
   });
 
-  $('#clear-badges').addEventListener('click', () => {
+  safeAddEventListener($('#clear-badges'), 'click', () => {
     state.config.badges = [];
     updateBadgesUI();
   });
@@ -704,7 +716,7 @@ function setupExtras() {
         });
       });
       el.querySelectorAll('.position-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
+        safeAddEventListener(btn, 'click', () => {
           el.querySelectorAll('.position-btn').forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
           state.config.badges[index].position = btn.dataset.pos;
@@ -730,20 +742,20 @@ function setupExtras() {
 }
 
   // Subtitles handlers
-  $('#subtitles-enabled').addEventListener('change', e => {
+  safeAddEventListener($('#subtitles-enabled'), 'change', e => {
     state.config.subtitles = state.config.subtitles || {};
     state.config.subtitles.enabled = e.target.checked;
     $('#subtitles-fields').hidden = !e.target.checked;
     $('#subtitle-font-v-group').hidden = !e.target.checked;
   });
 
-  $('#subtitle-font-h').addEventListener('input', e => {
+  safeAddEventListener($('#subtitle-font-h'), 'input', e => {
     const val = parseInt(e.target.value, 10);
     $('#subtitle-font-h-value').textContent = val;
     state.config.subtitleFontSizeHorizontal = val;
   });
 
-  $('#subtitle-font-v').addEventListener('input', e => {
+  safeAddEventListener($('#subtitle-font-v'), 'input', e => {
     const val = parseInt(e.target.value, 10);
     $('#subtitle-font-v-value').textContent = val;
     state.config.subtitleFontSizeVertical = val;
@@ -934,7 +946,7 @@ function renderTimeline(timeline) {
   });
 
   body.querySelectorAll('.duration-input button').forEach(btn => {
-    btn.addEventListener('click', () => {
+    safeAddEventListener(btn, 'click', () => {
       const index = parseInt(btn.dataset.index, 10);
       const input = body.querySelector(`input[data-index="${index}"]`);
       const step = 0.1;
@@ -1103,25 +1115,29 @@ function getFontPath() {
 }
 
 async function init() {
-  setupImages();
-  setupAudio();
-  setupScript();
-  setupConfig();
-  setupExtras();
+  // Core setup - must run first, each wrapped in try/catch
+  try { setupImages(); } catch (e) { console.error('[init] setupImages failed:', e); }
+  try { setupAudio(); } catch (e) { console.error('[init] setupAudio failed:', e); }
+  try { setupScript(); } catch (e) { console.error('[init] setupScript failed:', e); }
 
-  $('#build-timeline').addEventListener('click', buildTimeline);
-  $('#render-preview').addEventListener('click', renderPreview);
-  $('#export-video').addEventListener('click', exportVideo);
+  // UI config and extras - can fail without breaking core functionality
+  try { setupConfig(); } catch (e) { console.error('[init] setupConfig failed:', e); }
+  try { setupExtras(); } catch (e) { console.error('[init] setupExtras failed:', e); }
+
+  // Core button handlers - with null checks
+  safeAddEventListener($('#build-timeline'), 'click', buildTimeline);
+  safeAddEventListener($('#render-preview'), 'click', renderPreview);
+  safeAddEventListener($('#export-video'), 'click', exportVideo);
 
   // Focus editor buttons
-  $('#focus-center').addEventListener('click', () => {
+  safeAddEventListener($('#focus-center'), 'click', () => {
     if (focusEditorRect) {
       focusEditorRect = { x: 0.5, y: 0.5 };
       drawFocusOverlays();
     }
   });
 
-  $('#focus-apply-all').addEventListener('click', () => {
+  safeAddEventListener($('#focus-apply-all'), 'click', () => {
     if (focusEditorRect && state.timeline) {
       state.timeline.scenes.forEach(scene => {
         scene.focus = { ...focusEditorRect };
@@ -1134,7 +1150,7 @@ async function init() {
   });
 
   // Close focus editor when clicking outside
-  $('#focus-editor').addEventListener('click', e => {
+  safeAddEventListener($('#focus-editor'), 'click', e => {
     if (e.target === e.currentTarget) {
       closeFocusEditor();
     }
@@ -1142,7 +1158,7 @@ async function init() {
 
   // Focus editor canvas click to set focus point
   $$('#focus-editor canvas').forEach(canvas => {
-    canvas.addEventListener('click', e => {
+    safeAddEventListener(canvas, 'click', e => {
       const rect = canvas.getBoundingClientRect();
       const x = (e.clientX - rect.left) / rect.width;
       const y = (e.clientY - rect.top) / rect.height;
