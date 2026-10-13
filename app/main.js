@@ -197,37 +197,16 @@ ipcMain.handle('stage-file', async (event, { name, buffer }) => {
   return filePath;
 });
 
-ipcMain.handle('getAudioDuration', async (event, audioPath) => {
+ipcMain.handle('get-real-path', async (event, file) => {
   try {
-    const duration = await getAudioDuration(audioPath);
-    return { success: true, duration };
-  } catch (err) {
-    return { success: false, error: err.message };
+    const { webUtils } = require('electron');
+    if (webUtils && typeof webUtils.getPathForFile === 'function') {
+      return webUtils.getPathForFile(file) || '';
+    }
+  } catch {
+    // Ignore errors
   }
-});
-
-ipcMain.handle('getDefaultConfig', () => {
-  return getDefaultConfig();
-});
-
-ipcMain.handle('getFontPath', () => {
-  return path.join(__dirname, 'assets', 'fonts', 'DejaVuSans-Bold.ttf');
-});
-
-ipcMain.handle('getLastOutputDir', () => {
-  return lastOutputDir;
-});
-
-ipcMain.on('renderer-loaded', (event, message) => {
-  console.log('[main] renderer-loaded:', message);
-});
-
-ipcMain.on('preload-ready', (event, message) => {
-  console.log('[main] preload-ready:', message);
-});
-
-ipcMain.on('preload-error', (event, error) => {
-  console.error('[main] preload-error:', error);
+  return '';
 });
 
 module.exports = { createWindow };
