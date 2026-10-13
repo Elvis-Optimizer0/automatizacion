@@ -740,7 +740,6 @@ function setupExtras() {
     };
     return icons[pos];
   }
-}
 
   // Subtitles handlers
   safeAddEventListener($('#subtitles-enabled'), 'change', e => {
@@ -805,15 +804,6 @@ async function buildTimeline() {
     if (warningsEl) warningsEl.hidden = true;
   }
   
-  showToast('Línea de tiempo generada', 'success');
-}
-
-}
-  }
-
-  state.timeline = result.timeline;
-  renderTimeline(result.timeline);
-  $('#timeline-container').hidden = false;
   showToast('Línea de tiempo generada', 'success');
 }
 
@@ -1179,4 +1169,5 @@ if (typeof Sortable === 'undefined') {
   document.head.appendChild(script);
 } else {
   init();
+}
 }
