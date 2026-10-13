@@ -1,7 +1,5 @@
 // Utility functions (inlined for renderer process)
 // Use window.api exposed by preload.js (contextIsolation: true)
-console.log('[renderer] Starting renderer.js load');
-window.api.send('renderer-loaded', '[renderer] Starting renderer.js load');
 function formatTime(seconds) {
   const mins = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);
