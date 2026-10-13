@@ -1,6 +1,6 @@
 {
   "name": "video-maker",
-  "version": "1.2.7",
+  "version": "1.2.8",
   "description": "Video Maker - App de escritorio para crear videos con zoom, transiciones y overlays",
   "main": "app/main.js",
   "author": "Elvis-Optimizer0",
