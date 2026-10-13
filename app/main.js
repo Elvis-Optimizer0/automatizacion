@@ -95,6 +95,18 @@ ipcMain.handle('openFolder', async (event, folderPath) => {
   await shell.openPath(folderPath);
 });
 
+ipcMain.on('renderer-loaded', (event, message) => {
+  console.log('[main] renderer-loaded:', message);
+});
+
+ipcMain.on('preload-ready', (event, message) => {
+  console.log('[main] preload-ready:', message);
+});
+
+ipcMain.on('preload-error', (event, error) => {
+  console.error('[main] preload-error:', error);
+});
+
 ipcMain.handle('buildTimeline', async (event, project) => {
   try {
     console.log('[buildTimeline] images[0]=', JSON.stringify(project.images?.[0]), 'narration=', JSON.stringify(project.narration));
@@ -133,14 +145,6 @@ ipcMain.handle('renderAllOutputs', async (event, project, timeline, fontPath, ou
     const result = await renderAllOutputs(project, timeline, fontPath, outputDir, (progress, current, total, currentOutput, totalOutputs, resolution) => {
       event.sender.send('render-progress', { progress, current, total, currentOutput, totalOutputs, resolution });
     });
-
-    const { app: electronApp } = require('electron');
-    const settingsPath = path.join(electronApp.getPath('userData'), 'settings.json');
-    try {
-      const fs = require('fs');
-      fs.writeFileSync(settingsPath, JSON.stringify({ lastOutputDir: outputDir }, null, 2));
-    } catch (e) {}
-
     return { success: true, ...result };
   } catch (err) {
     return { success: false, error: err.message };
@@ -181,18 +185,49 @@ ipcMain.handle('getLastOutputDir', () => {
 
 ipcMain.handle('stage-file', async (event, { name, buffer }) => {
   const fs = require('fs');
+  const os = require('os');
   const path = require('path');
-  const { app } = require('electron');
-  
-  const safeName = name.replace(/[<>:"\/\\|?*]/g, '_');
-  const tempDir = path.join(app.getPath('temp'), 'video-maker-inputs');
-  
+  const tempDir = path.join(os.tmpdir(), 'video-maker-inputs');
   try {
     await fs.promises.mkdir(tempDir, { recursive: true });
   } catch (e) {}
-  
+  const safeName = name.replace(/[<>:"\/\\|?*]/g, '_');
   const filePath = path.join(tempDir, `${Date.now()}_${safeName}`);
   await fs.promises.writeFile(filePath, Buffer.from(buffer));
-  
   return filePath;
 });
+
+ipcMain.handle('getAudioDuration', async (event, audioPath) => {
+  try {
+    const duration = await getAudioDuration(audioPath);
+    return { success: true, duration };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('getDefaultConfig', () => {
+  return getDefaultConfig();
+});
+
+ipcMain.handle('getFontPath', () => {
+  return path.join(__dirname, 'assets', 'fonts', 'DejaVuSans-Bold.ttf');
+});
+
+ipcMain.handle('getLastOutputDir', () => {
+  return lastOutputDir;
+});
+
+ipcMain.on('renderer-loaded', (event, message) => {
+  console.log('[main] renderer-loaded:', message);
+});
+
+ipcMain.on('preload-ready', (event, message) => {
+  console.log('[main] preload-ready:', message);
+});
+
+ipcMain.on('preload-error', (event, error) => {
+  console.error('[main] preload-error:', error);
+});
+
+module.exports = { createWindow };

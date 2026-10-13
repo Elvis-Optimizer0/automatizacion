@@ -1,4 +1,7 @@
 // Utility functions (inlined for renderer process)
+// Use window.api exposed by preload.js (contextIsolation: true)
+console.log('[renderer] Starting renderer.js load');
+window.api.send('renderer-loaded', '[renderer] Starting renderer.js load');
 function formatTime(seconds) {
   const mins = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);
@@ -37,6 +40,10 @@ function debounce(fn, ms) {
 }
 
 async function makeEntry(file) {
+  if (typeof window.api === 'undefined') {
+    alert('Error: el puente con la aplicación (preload) no cargó');
+    throw new Error('window.api no disponible');
+  }
   let p = await window.api.getRealPath(file);
   if (!p) p = await window.api.stageFile(file.name, await file.arrayBuffer());
   console.log('[makeEntry]', file.name, 'path=', JSON.stringify(p));
@@ -110,6 +117,10 @@ function showToast(message, type = 'error') {
 }
 
 function setupDropZone(dropzoneId, inputId, onFiles, options = {}) {
+  if (typeof window.api === 'undefined') {
+    alert('Error: el puente con la aplicación (preload) no cargó');
+    return;
+  }
   const dropzone = $(`#${dropzoneId}`);
   const input = $(`#${inputId}`);
   if (!dropzone || !input) {
