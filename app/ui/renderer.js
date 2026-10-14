@@ -168,6 +168,7 @@ function setupGlobalDragDrop() {
     e.preventDefault();
     e.stopPropagation();
   };
+  const grid = $('#images-grid');
 
   ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt => {
     document.addEventListener(evt, e => {
