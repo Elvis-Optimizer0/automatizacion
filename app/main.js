@@ -197,16 +197,4 @@ ipcMain.handle('stage-file', async (event, { name, buffer }) => {
   return filePath;
 });
 
-ipcMain.handle('get-real-path', async (event, file) => {
-  try {
-    const { webUtils } = require('electron');
-    if (webUtils && typeof webUtils.getPathForFile === 'function') {
-      return webUtils.getPathForFile(file) || '';
-    }
-  } catch {
-    // Ignore errors
-  }
-  return '';
-});
-
 module.exports = { createWindow };

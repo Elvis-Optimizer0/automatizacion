@@ -14,7 +14,13 @@ try {
     getDefaultConfig: () => ipcRenderer.invoke('getDefaultConfig'),
     getFontPath: () => ipcRenderer.invoke('getFontPath'),
     getLastOutputDir: () => ipcRenderer.invoke('getLastOutputDir'),
-    getRealPath: (file) => ipcRenderer.invoke('get-real-path', file),
+    getRealPath: (file) => {
+      try {
+        return webUtils.getPathForFile(file) || '';
+      } catch {
+        return '';
+      }
+    },
     stageFile: (name, buffer) => ipcRenderer.invoke('stage-file', { name, buffer }),
     onRenderProgress: (callback) => {
       const handler = (_event, data) => callback(data);

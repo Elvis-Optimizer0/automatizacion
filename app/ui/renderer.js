@@ -42,8 +42,11 @@ async function makeEntry(file) {
     alert('Error: el puente con la aplicación (preload) no cargó');
     throw new Error('window.api no disponible');
   }
-  let p = await window.api.getRealPath(file);
-  if (!p) p = await window.api.stageFile(file.name, await file.arrayBuffer());
+  let p = window.api.getRealPath(file);
+  if (!p) {
+    const arrayBuffer = await file.arrayBuffer();
+    p = await window.api.stageFile(file.name, arrayBuffer);
+  }
   console.log('[makeEntry]', file.name, 'path=', JSON.stringify(p));
   if (!p || !/^([a-zA-Z]:[\\/]|\\\\)/.test(p)) throw new Error('No se obtuvo ruta absoluta para ' + file.name);
   return { name: file.name, path: p, blobUrl: URL.createObjectURL(file), size: file.size, type: file.type };
