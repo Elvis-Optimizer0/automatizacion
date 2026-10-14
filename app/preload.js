@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 try {
   const api = {
@@ -67,6 +67,7 @@ try {
     }
   });
 
+  contextBridge.exposeInMainWorld('api', api);
 } catch (e) {
   console.error('[preload] Error:', e.message, e.stack);
 }

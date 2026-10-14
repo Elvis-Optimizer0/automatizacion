@@ -20,19 +20,20 @@
           <h2>Imágenes</h2>
         </div>
         <div class="drop-zone" id="images-dropzone">
-          <input type="file" id="images-input" multiple accept="image/png,image/jpeg,image/webp,video/mp4" hidden>
-          <div class="drop-zone-content" id="images-drop-content">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-            <p>Arrastra imágenes y videos aquí o haz clic para seleccionar</p>
-            <span class="hint">PNG, JPG, WEBP, MP4 · Orden = orden de escenas</span>
-          </div>
-          <div class="drop-zone-preview" id="images-preview" hidden>
-            <div class="preview-grid" id="images-grid"></div>
-            <div class="preview-actions">
-              <button class="btn btn-secondary" id="clear-images">Quitar todas</button>
+          <label for="images-input" class="drop-zone-label">
+            <input type="file" id="images-input" multiple accept="image/png,image/jpeg,image/webp,video/mp4" class="file-input-hidden">
+            <div class="drop-zone-content" id="images-drop-content">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <p>Arrastra imágenes y videos aquí o haz clic para seleccionar</p>
+              <span class="hint">PNG, JPG, WEBP, MP4 · Orden = orden de escenas</span>
+            </div>
+            <div class="drop-zone-preview" id="images-preview" hidden>
+              <div class="preview-grid" id="images-grid"></div>
+              <div class="preview-actions">
+                <button class="btn btn-secondary" id="clear-images">Quitar todas</button>
+              </div>
             </div>
           </div>
-        </div>
         <p class="status-text" id="images-status">Sin archivos</p>
 
         <div class="focus-editor" id="focus-editor" hidden>
@@ -59,11 +60,13 @@
           <div class="audio-zone">
             <label class="zone-label">Narración <span class="required">*</span></label>
             <div class="drop-zone" id="narration-dropzone">
-              <input type="file" id="narration-input" accept="audio/mp3,audio/wav,audio/m4a,audio/aac" hidden>
-              <div class="drop-zone-content" id="narration-drop-content">
-                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
-                <p>Archivo de voz (obligatorio)</p>
-              </div>
+              <label for="narration-input" class="drop-zone-label">
+                <input type="file" id="narration-input" accept="audio/mp3,audio/wav,audio/m4a,audio/aac" class="file-input-hidden">
+                <div class="drop-zone-content" id="narration-drop-content">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+                  <p>Archivo de voz (obligatorio)</p>
+                </div>
+              </label>
               <div class="file-info" id="narration-info" hidden>
                 <span class="file-name" id="narration-name"></span>
                 <span class="file-duration" id="narration-duration"></span>
@@ -75,11 +78,13 @@
           <div class="audio-zone">
             <label class="zone-label">Música de fondo</label>
             <div class="drop-zone" id="music-dropzone">
-              <input type="file" id="music-input" accept="audio/mp3,audio/wav,audio/m4a,audio/aac" hidden>
-              <div class="drop-zone-content" id="music-drop-content">
-                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 2v20"/><path d="M2 12h20"/></svg>
-                <p>Opcional</p>
-              </div>
+              <label for="music-input" class="drop-zone-label">
+                <input type="file" id="music-input" accept="audio/mp3,audio/wav,audio/m4a,audio/aac" class="file-input-hidden">
+                <div class="drop-zone-content" id="music-drop-content">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 2v20"/><path d="M2 12h20"/></svg>
+                  <p>Opcional</p>
+                </div>
+              </label>
               <div class="file-info" id="music-info" hidden>
                 <span class="file-name" id="music-name"></span>
                 <span class="file-duration" id="music-duration"></span>

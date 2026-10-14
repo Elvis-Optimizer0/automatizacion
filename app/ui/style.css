@@ -152,6 +152,30 @@ body {
   color: var(--text-dim);
 }
 
+.file-input-hidden {
+  position: absolute;
+  opacity: 0;
+  clip: rect(0, 0, 0, 0);
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+
+.drop-zone-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+
+.drop-zone-label:hover .drop-zone-content .icon,
+.drop-zone-label:focus-within .drop-zone-content .icon {
+  color: var(--accent);
+}
+
 .file-info {
   display: flex;
   align-items: center;

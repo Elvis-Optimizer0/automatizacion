@@ -114,6 +114,9 @@ function showToast(message, type = 'error') {
   setTimeout(() => toast.classList.add('hidden'), 5000);
 }
 
+// Global registry for drop zone file handlers
+window.dropzoneOnFiles = window.dropzoneOnFiles || {};
+
 function setupDropZone(dropzoneId, inputId, onFiles, options = {}) {
   if (typeof window.api === 'undefined') {
     alert('Error: el puente con la aplicación (preload) no cargó');
@@ -125,32 +128,13 @@ function setupDropZone(dropzoneId, inputId, onFiles, options = {}) {
     console.error(`[setupDropZone] Missing elements: ${dropzoneId} or ${inputId}`);
     return;
   }
-  const content = dropzone.querySelector('.drop-zone-content');
-  const preview = dropzone.querySelector('.drop-zone-preview');
-  const fileInfo = dropzone.querySelector('.file-info');
+  dropzone.dataset.dropzone = dropzoneId;
 
-  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt => {
-    safeAddEventListener(dropzone, evt, e => {
-      e.preventDefault();
-      e.stopPropagation();
-    });
-  });
+  // Register the onFiles callback for this drop zone
+  window.dropzoneOnFiles = window.dropzoneOnFiles || {};
+  window.dropzoneOnFiles[dropzoneId] = onFiles;
 
-  ['dragenter', 'dragover'].forEach(evt => {
-    safeAddEventListener(dropzone, evt, () => dropzone.classList.add('drag-over'));
-  });
-
-  ['dragleave', 'drop'].forEach(evt => {
-    safeAddEventListener(dropzone, evt, () => dropzone.classList.remove('drag-over'));
-  });
-
-  safeAddEventListener(dropzone, 'drop', e => {
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length > 0) onFiles(files);
-  });
-
-  safeAddEventListener(dropzone, 'click', () => input.click());
-
+  // Input change event
   input.addEventListener('change', e => {
     const files = Array.from(e.target.files);
     if (files.length > 0) onFiles(files);
@@ -177,6 +161,53 @@ function updateImagesUI() {
   preview.hidden = false;
   status.textContent = `${state.images.length} imágenes · ${formatFileSize(state.images.reduce((sum, img) => sum + (img.size || 0), 0))}`;
   updateScriptStatus();
+}
+
+function setupGlobalDragDrop() {
+  const preventDefaults = e => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt => {
+    document.addEventListener(evt, e => {
+      e.preventDefault();
+      e.stopPropagation();
+    }, false);
+  });
+
+  document.addEventListener('drop', e => {
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length === 0) return;
+
+    const dropzoneEl = e.target.closest('[data-dropzone]');
+    if (!dropzoneEl) return;
+
+    const dropzoneId = dropzoneEl.dataset.dropzone;
+    const onFiles = window.dropzoneOnFiles?.[dropzoneId];
+    if (onFiles) onFiles(files);
+
+    // Trigger file input change for validation/UI update
+    const dt = new DataTransfer();
+    files.forEach(f => dt.items.add(f));
+    const input = document.getElementById(`${dropzoneId}-input`);
+    if (input) input.files = dt.files;
+  });
+
+  ['dragenter', 'dragover'].forEach(evt => {
+    document.addEventListener(evt, e => {
+      const dropzoneEl = e.target.closest('[data-dropzone]');
+      if (dropzoneEl) dropzoneEl.classList.add('drag-over');
+    }, false);
+  });
+
+  ['dragleave', 'drop'].forEach(evt => {
+    document.addEventListener(evt, e => {
+      const dropzoneEl = e.target.closest('[data-dropzone]');
+      if (dropzoneEl) dropzoneEl.classList.remove('drag-over');
+    }, false);
+  });
+}
 
   grid.innerHTML = state.images.map((img, index) => `
     <div class="preview-item" data-index="${index}">
@@ -208,7 +239,6 @@ function updateImagesUI() {
       updateTimelineButton();
     }
   });
-}
 
 function updateTimelineButton() {
   const btn = $('#build-timeline');
@@ -1123,6 +1153,9 @@ async function init() {
   // UI config and extras - can fail without breaking core functionality
   try { setupConfig(); } catch (e) { console.error('[init] setupConfig failed:', e); }
   try { setupExtras(); } catch (e) { console.error('[init] setupExtras failed:', e); }
+
+  // Global drag & drop handler (single document-level handler)
+  try { setupGlobalDragDrop(); } catch (e) { console.error('[init] setupGlobalDragDrop failed:', e); }
 
   // Core button handlers - with null checks
   safeAddEventListener($('#build-timeline'), 'click', buildTimeline);
