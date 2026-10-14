@@ -161,6 +161,41 @@ function updateImagesUI() {
   preview.hidden = false;
   status.textContent = `${state.images.length} imágenes · ${formatFileSize(state.images.reduce((sum, img) => sum + (img.size || 0), 0))}`;
   updateScriptStatus();
+
+  if (grid) {
+    grid.innerHTML = state.images.map((img, index) => `
+      <div class="preview-item" data-index="${index}">
+        <span class="item-number">${index + 1}</span>
+        ${img.type === 'video'
+          ? `<video src="${img.blobUrl}" muted></video>`
+          : `<img src="${img.blobUrl}" alt="Escena ${index + 1}">`
+        }
+        <button class="remove-btn" data-index="${index}" title="Quitar">✕</button>
+      </div>
+    `).join('');
+
+    $$('#images-grid .remove-btn').forEach(btn => {
+      safeAddEventListener(btn, 'click', e => {
+        e.stopPropagation();
+        const index = parseInt(e.currentTarget.dataset.index, 10);
+        state.images.splice(index, 1);
+        updateImagesUI();
+        updateTimelineButton();
+      });
+    });
+
+    if (typeof Sortable !== 'undefined') {
+      new Sortable(grid, {
+        animation: 150,
+        onEnd: evt => {
+          const [moved] = state.images.splice(evt.oldIndex, 1);
+          state.images.splice(evt.newIndex, 0, moved);
+          updateImagesUI();
+          updateTimelineButton();
+        }
+      });
+    }
+  }
 }
 
 function setupGlobalDragDrop() {
@@ -209,37 +244,6 @@ function setupGlobalDragDrop() {
     }, false);
   });
 }
-
-  grid.innerHTML = state.images.map((img, index) => `
-    <div class="preview-item" data-index="${index}">
-      <span class="item-number">${index + 1}</span>
-      ${img.type === 'video'
-        ? `<video src="${img.blobUrl}" muted></video>`
-        : `<img src="${img.blobUrl}" alt="Escena ${index + 1}">`
-      }
-      <button class="remove-btn" data-index="${index}" title="Quitar">✕</button>
-    </div>
-  `).join('');
-
-  $$('#images-grid .remove-btn').forEach(btn => {
-    safeAddEventListener(btn, 'click', e => {
-      e.stopPropagation();
-      const index = parseInt(e.currentTarget.dataset.index, 10);
-      state.images.splice(index, 1);
-      updateImagesUI();
-      updateTimelineButton();
-    });
-  });
-
-  new Sortable(grid, {
-    animation: 150,
-    onEnd: evt => {
-      const [moved] = state.images.splice(evt.oldIndex, 1);
-      state.images.splice(evt.newIndex, 0, moved);
-      updateImagesUI();
-      updateTimelineButton();
-    }
-  });
 
 function updateTimelineButton() {
   const btn = $('#build-timeline');
@@ -380,6 +384,87 @@ async function getAudioDuration(item) {
   return result.duration;
 }
 
+function updateScriptStatus() {
+  const segments = state.script.trim().split('\n').filter(l => l.trim()).length;
+  const hasTimestamps = /\(\d{1,2}:\d{2}\)/.test(state.script);
+  
+  // Also check for new scene marker format [Escena N] 0:00 - 0:30
+  const hasSceneMarkers = /[\[\(]?\s*(?:escena\s*)(\d+)\s*[\]\):]?/gi.test(state.script);
+  const sceneMarkers = state.script.match(/[\[\(]?\s*(?:escena\s*)(\d+)\s*[\]\):]?/gi);
+  const scenesDetected = hasSceneMarkers 
+    ? (sceneMarkers ? sceneMarkers.length : 0)
+    : (hasTimestamps ? segments : 0);
+  
+  const imagesAssigned = state.images.length;
+  const statusEl = $('#script-status');
+  if (statusEl) {
+    statusEl.textContent = `${scenesDetected} escenas detectadas · ${imagesAssigned} imágenes asignadas`;
+  }
+  updateSceneWarnings();
+}
+
+function updateSceneWarnings() {
+  const warningsEl = $('#scene-warnings');
+  if (!warningsEl) return;
+  
+  const script = state.script;
+  const images = state.images;
+  const warnings = [];
+  
+  // Check for scene markers
+  if (script && script.trim()) {
+    try {
+      // Try to parse scenes from script
+      const sceneMarkers = script.match(/[\[\(]?\s*(?:escena\s*)(\d+)\s*[\]\):]?/gi);
+      if (sceneMarkers) {
+        const sceneNumbers = sceneMarkers.map(m => {
+          const match = m.match(/escena\s*(\d+)/i);
+          return match ? parseInt(match[1], 10) : null;
+        }).filter(n => n !== null);
+        
+        // Check for duplicate scene numbers
+        const seen = new Set();
+        for (const num of sceneNumbers) {
+          if (seen.has(num)) {
+            warnings.push(`⚠ Número de escena duplicado: ${num}`);
+          }
+          seen.add(num);
+        }
+        
+        // Check for scenes without images
+        for (const num of seen) {
+          const hasImage = images.some(img => {
+            const base = img.name.replace(/\.[^.]+$/, '');
+            const match = base.match(/escena[\s_\-]*(\d+)/i);
+            return match && parseInt(match[1], 10) === num;
+          });
+          if (!hasImage) {
+            warnings.push(`⚠ Escena ${num} sin imagen asignada`);
+          }
+        }
+        
+        // Check for images without scene numbers
+        for (const img of images) {
+          const base = img.name.replace(/\.[^.]+$/, '');
+          const match = base.match(/escena[\s_\-]*(\d+)/i);
+          if (!match) {
+            warnings.push(`⚠ Imagen "${img.name}" sin número de escena, se usará orden de carga`);
+          }
+        }
+      }
+    } catch (e) {
+      // Ignore parse errors
+    }
+  }
+  
+  if (warnings.length > 0) {
+    warningsEl.innerHTML = warnings.map(w => `<div class="warning-item">${w}</div>`).join('');
+    warningsEl.hidden = false;
+  } else {
+    warningsEl.hidden = true;
+  }
+}
+
 function setupScript() {
   const textarea = $('#script-textarea');
   const status = $('#script-status');
@@ -418,88 +503,10 @@ function setupScript() {
       textarea.value = ev.target.result;
       state.script = ev.target.result;
       updateScriptStatus();
-    };
+};
     reader.readAsText(file);
     e.target.value = '';
   });
-
-  function updateScriptStatus() {
-    const segments = state.script.trim().split('\n').filter(l => l.trim()).length;
-    const hasTimestamps = /\(\d{1,2}:\d{2}\)/.test(state.script);
-    
-    // Also check for new scene marker format [Escena N] 0:00 - 0:30
-    const hasSceneMarkers = /[\[\(]?\s*(?:escena\s*)(\d+)\s*[\]\):]?/gi.test(state.script);
-    const sceneMarkers = state.script.match(/[\[\(]?\s*(?:escena\s*)(\d+)\s*[\]\):]?/gi);
-    const scenesDetected = hasSceneMarkers 
-      ? (sceneMarkers ? sceneMarkers.length : 0)
-      : (hasTimestamps ? segments : 0);
-    
-    const imagesAssigned = state.images.length;
-    status.textContent = `${scenesDetected} escenas detectadas · ${imagesAssigned} imágenes asignadas`;
-    updateSceneWarnings();
-  }
-
-  function updateSceneWarnings() {
-    const warningsEl = $('#scene-warnings');
-    if (!warningsEl) return;
-    
-    const script = state.script;
-    const images = state.images;
-    const warnings = [];
-    
-    // Check for scene markers
-    if (script && script.trim()) {
-      try {
-        // Try to parse scenes from script
-        const sceneMarkers = script.match(/[\[\(]?\s*(?:escena\s*)(\d+)\s*[\]\):]?/gi);
-        if (sceneMarkers) {
-          const sceneNumbers = sceneMarkers.map(m => {
-            const match = m.match(/escena\s*(\d+)/i);
-            return match ? parseInt(match[1], 10) : null;
-          }).filter(n => n !== null);
-          
-          // Check for duplicate scene numbers
-          const seen = new Set();
-          for (const num of sceneNumbers) {
-            if (seen.has(num)) {
-              warnings.push(`⚠ Número de escena duplicado: ${num}`);
-            }
-            seen.add(num);
-          }
-          
-          // Check for scenes without images
-          for (const num of seen) {
-            const hasImage = images.some(img => {
-              const base = img.name.replace(/\.[^.]+$/, '');
-              const match = base.match(/escena[\s_\-]*(\d+)/i);
-              return match && parseInt(match[1], 10) === num;
-            });
-            if (!hasImage) {
-              warnings.push(`⚠ Escena ${num} sin imagen asignada`);
-            }
-          }
-          
-          // Check for images without scene numbers
-          for (const img of images) {
-            const base = img.name.replace(/\.[^.]+$/, '');
-            const match = base.match(/escena[\s_\-]*(\d+)/i);
-            if (!match) {
-              warnings.push(`⚠ Imagen "${img.name}" sin número de escena, se usará orden de carga`);
-            }
-          }
-        }
-      } catch (e) {
-        // Ignore parse errors
-      }
-    }
-    
-    if (warnings.length > 0) {
-      warningsEl.innerHTML = warnings.map(w => `<div class="warning-item">${w}</div>`).join('');
-      warningsEl.hidden = false;
-    } else {
-      warningsEl.hidden = true;
-    }
-  }
 }
 
 function setupConfig() {
@@ -1011,6 +1018,7 @@ async function renderPreview() {
 
   const project = buildProject();
   const fontPath = await getFontPath();
+  let cleanup = null;
 
   try {
     const tempPath = await window.api.saveFileDialog({
@@ -1026,13 +1034,13 @@ async function renderPreview() {
       return;
     }
 
-    const cleanup = window.api.onPreviewProgress(data => {
+    cleanup = window.api.onPreviewProgress(data => {
       $('#preview-progress-fill').style.width = `${data.progress}%`;
     });
 
     const result = await window.api.renderPreview(project, state.timeline, fontPath, tempPath);
 
-    cleanup();
+    if (cleanup) cleanup();
     btn.disabled = false;
     btn.textContent = 'Generar vista previa';
     $('#preview-progress').hidden = true;
@@ -1046,7 +1054,7 @@ async function renderPreview() {
       showToast(result.error);
     }
   } catch (err) {
-    cleanup();
+    if (cleanup) cleanup();
     btn.disabled = false;
     btn.textContent = 'Generar vista previa';
     $('#preview-progress').hidden = true;
