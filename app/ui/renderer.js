@@ -42,6 +42,17 @@ async function makeEntry(file) {
     alert('Error: el puente con la aplicación (preload) no cargó');
     throw new Error('window.api no disponible');
   }
+
+  // If file is a path object from selectFiles, use it directly
+  if (file && file.path && !file.arrayBuffer) {
+    const p = file.path;
+    showToast(`ruta: ${p || 'vacía'}`, 'success');
+    console.log('[makeEntry] from path:', file.name, 'path=', JSON.stringify(p));
+    if (!p || !/^([a-zA-Z]:[\\/]|\\\\)/.test(p)) throw new Error('No se obtuvo ruta absoluta para ' + file.name);
+    return { name: file.name, path: p, blobUrl: file.blobUrl || ('file://' + p.replace(/\\/g, '/')), size: file.size || 0, type: file.type };
+  }
+
+  // Otherwise, it's a File object from drag & drop or input change
   let p = window.api.getRealPath(file);
   if (!p) {
     const arrayBuffer = await file.arrayBuffer();
@@ -133,13 +144,38 @@ function setupDropZone(dropzoneId, inputId, onFiles, options = {}) {
     console.error(`[setupDropZone] Missing elements: ${dropzoneId} or ${inputId}`);
     return;
   }
-  dropzone.dataset.dropzone = dropzoneId;
+  // Extract dropzone type from ID (e.g., 'images-dropzone' -> 'images')
+  const dropzoneType = dropzoneId.replace(/-dropzone$/, '');
+  dropzone.dataset.dropzone = dropzoneType;
 
   // Register the onFiles callback for this drop zone
   window.dropzoneOnFiles = window.dropzoneOnFiles || {};
   window.dropzoneOnFiles[dropzoneId] = onFiles;
 
-  // Input change event
+  // Native click handler for file selection dialog
+  dropzone.addEventListener('click', async e => {
+    // Ignore clicks on remove buttons and clear buttons
+    if (e.target.closest('.remove-btn, #clear-images, #clear-narration, #clear-music, #clear-badges')) {
+      return;
+    }
+    // Don't trigger if clicking on the file input itself
+    if (e.target === input) return;
+
+    try {
+      const fileOptions = options.selectFilesOptions || {};
+      const paths = await window.api.selectFiles(fileOptions);
+      if (paths && paths.length > 0) {
+        showToast(`selectFiles: ${paths.length} archivo(s)`, 'success');
+        const files = paths.map(p => createFileFromPath(p));
+        await onFiles(files);
+      }
+    } catch (err) {
+      console.error('[setupDropZone] selectFiles error:', err);
+      showToast(`ERROR seleccionando: ${err.message}`, 'error');
+    }
+  });
+
+  // Input change event (for drag & drop)
   input.addEventListener('change', async e => {
     const files = Array.from(e.target.files);
     if (files.length > 0) {
@@ -153,6 +189,18 @@ function setupDropZone(dropzoneId, inputId, onFiles, options = {}) {
     }
     e.target.value = '';
   });
+}
+
+function createFileFromPath(path) {
+  const name = path.split(/[\\/]/).pop();
+  const isVideo = /\.(mp4)$/i.test(name);
+  return {
+    name,
+    path,
+    blobUrl: 'file://' + path.replace(/\\/g, '/'),
+    size: 0,
+    type: isVideo ? 'video' : 'image'
+  };
 }
 
 function updateImagesUI() {
@@ -272,6 +320,15 @@ function setupImages() {
     state.images = [...state.images, ...newImages];
     updateImagesUI();
     updateTimelineButton();
+  }, {
+    selectFilesOptions: {
+      properties: ['openFile', 'multiSelections'],
+      filters: [
+        { name: 'Imágenes y Video', extensions: ['png', 'jpg', 'jpeg', 'webp', 'mp4'] },
+        { name: 'Todos', extensions: ['*'] }
+      ],
+      title: 'Seleccionar imágenes y videos'
+    }
   });
 
   safeAddEventListener($('#clear-images'), 'click', e => {
@@ -298,6 +355,15 @@ function setupAudio() {
     } catch (e) {
       showToast(`Error al procesar narración: ${e.message}`);
     }
+  }, {
+    selectFilesOptions: {
+      properties: ['openFile'],
+      filters: [
+        { name: 'Audio', extensions: ['mp3', 'wav', 'm4a', 'aac'] },
+        { name: 'Todos', extensions: ['*'] }
+      ],
+      title: 'Seleccionar archivo de narración'
+    }
   });
 
   setupDropZone('music-dropzone', 'music-input', async files => {
@@ -312,6 +378,15 @@ function setupAudio() {
       updateMusicUI();
     } catch (e) {
       showToast(`Error al procesar música: ${e.message}`);
+    }
+  }, {
+    selectFilesOptions: {
+      properties: ['openFile'],
+      filters: [
+        { name: 'Audio', extensions: ['mp3', 'wav', 'm4a', 'aac'] },
+        { name: 'Todos', extensions: ['*'] }
+      ],
+      title: 'Seleccionar música de fondo'
     }
   });
 
@@ -1218,14 +1293,16 @@ async function init() {
   window.api.getDefaultConfig().then(config => {
     state.config = { ...state.config, ...config };
   });
+}
 
-if (typeof Sortable === 'undefined') {
-  const script = document.createElement('script');
-  script.src = 'https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js';
-  script.onload = init;
-  script.onerror = init;
-  document.head.appendChild(script);
-} else {
+function runInit() {
+  console.log('[init] ejecutado');
+  showToast('app lista', 'success');
   init();
 }
+
+if (document.readyState !== 'loading') {
+  runInit();
+} else {
+  document.addEventListener('DOMContentLoaded', runInit);
 }
