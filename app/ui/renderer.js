@@ -47,9 +47,11 @@ async function makeEntry(file) {
     const arrayBuffer = await file.arrayBuffer();
     p = await window.api.stageFile(file.name, arrayBuffer);
   }
+  showToast(`ruta: ${p || 'vacía'}`, 'success');
   console.log('[makeEntry]', file.name, 'path=', JSON.stringify(p));
   if (!p || !/^([a-zA-Z]:[\\/]|\\\\)/.test(p)) throw new Error('No se obtuvo ruta absoluta para ' + file.name);
-  return { name: file.name, path: p, blobUrl: URL.createObjectURL(file), size: file.size, type: file.type };
+  const isVideo = file.type.startsWith('video/') || /\.(mp4)$/i.test(file.name);
+  return { name: file.name, path: p, blobUrl: URL.createObjectURL(file), size: file.size, type: isVideo ? 'video' : 'image' };
 }
 
 let state = {
@@ -138,9 +140,17 @@ function setupDropZone(dropzoneId, inputId, onFiles, options = {}) {
   window.dropzoneOnFiles[dropzoneId] = onFiles;
 
   // Input change event
-  input.addEventListener('change', e => {
+  input.addEventListener('change', async e => {
     const files = Array.from(e.target.files);
-    if (files.length > 0) onFiles(files);
+    if (files.length > 0) {
+      showToast(`change: ${files.length} archivo(s)`, 'success');
+      try {
+        await onFiles(files);
+      } catch (err) {
+        console.error('[setupDropZone] onFiles error:', err);
+        showToast(`ERROR importando: ${err.message}`, 'error');
+      }
+    }
     e.target.value = '';
   });
 }
@@ -179,6 +189,7 @@ function updateImagesUI() {
 
     $$('#images-grid .remove-btn').forEach(btn => {
       safeAddEventListener(btn, 'click', e => {
+        e.preventDefault();
         e.stopPropagation();
         const index = parseInt(e.currentTarget.dataset.index, 10);
         state.images.splice(index, 1);
@@ -202,12 +213,6 @@ function updateImagesUI() {
 }
 
 function setupGlobalDragDrop() {
-  const preventDefaults = e => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
-  const grid = $('#images-grid');
-
   ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evt => {
     document.addEventListener(evt, e => {
       e.preventDefault();
@@ -225,12 +230,6 @@ function setupGlobalDragDrop() {
     const dropzoneId = dropzoneEl.dataset.dropzone;
     const onFiles = window.dropzoneOnFiles?.[dropzoneId];
     if (onFiles) onFiles(files);
-
-    // Trigger file input change for validation/UI update
-    const dt = new DataTransfer();
-    files.forEach(f => dt.items.add(f));
-    const input = document.getElementById(`${dropzoneId}-input`);
-    if (input) input.files = dt.files;
   });
 
   ['dragenter', 'dragover'].forEach(evt => {
@@ -275,7 +274,9 @@ function setupImages() {
     updateTimelineButton();
   });
 
-  safeAddEventListener($('#clear-images'), 'click', () => {
+  safeAddEventListener($('#clear-images'), 'click', e => {
+    e.preventDefault();
+    e.stopPropagation();
     state.images = [];
     updateImagesUI();
     updateTimelineButton();
@@ -315,6 +316,7 @@ function setupAudio() {
   });
 
   safeAddEventListener($('#clear-narration'), 'click', e => {
+    e.preventDefault();
     e.stopPropagation();
     state.narration = null;
     updateNarrationUI();
@@ -322,6 +324,7 @@ function setupAudio() {
   });
 
   safeAddEventListener($('#clear-music'), 'click', e => {
+    e.preventDefault();
     e.stopPropagation();
     state.music = null;
     updateMusicUI();
@@ -1220,6 +1223,7 @@ if (typeof Sortable === 'undefined') {
   const script = document.createElement('script');
   script.src = 'https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js';
   script.onload = init;
+  script.onerror = init;
   document.head.appendChild(script);
 } else {
   init();
